@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
@@ -15,15 +15,28 @@ interface AttendanceRecord {
   total_hours: number | null;
   is_late: boolean;
   date: string;
+  attendance_status?: string | null;
   employee?: {
     first_name: string;
     last_name: string;
   };
 }
 
+interface Employee {
+  id: number;
+  first_name: string;
+  last_name: string;
+  employee_code: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  position?: string;
+}
+
 export default function AttendancePage() {
   const router = useRouter();
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -31,9 +44,42 @@ export default function AttendancePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [actionEmployeeId, setActionEmployeeId] = useState("");
   const [user, setUser] = useState<any>(null);
   const [todayStatus, setTodayStatus] = useState<any>(null);
+  const [todayStatuses, setTodayStatuses] = useState<Record<number, AttendanceRecord>>({});
   const [clocking, setClocking] = useState(false);
+  const [adminClocking, setAdminClocking] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
+  const employeeLookup = useMemo(() => {
+    const map: Record<number, Employee> = {};
+    employees.forEach((emp) => {
+      map[emp.id] = emp;
+    });
+    return map;
+  }, [employees]);
+
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) return employees;
+    const term = employeeSearch.toLowerCase();
+    return employees.filter((emp) => {
+      const haystack = [
+        emp.first_name,
+        emp.last_name,
+        emp.employee_code,
+        emp.email,
+        emp.phone,
+        emp.department,
+        emp.position,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [employees, employeeSearch]);
 
   useEffect(() => {
     const token = getToken();
@@ -42,29 +88,75 @@ export default function AttendancePage() {
       return;
     }
     fetchUser();
-    fetchAttendances();
+    fetchEmployees();
     checkTodayStatus();
-  }, [page, fromDate, toDate, router]);
+    fetchTodayStatuses();
+  }, [router]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetchAttendances();
+  }, [page, fromDate, toDate, employeeFilter]);
+
+  useEffect(() => {
+    if (!actionEmployeeId && employees.length > 0) {
+      setActionEmployeeId(employees[0].id.toString());
+    }
+  }, [employees, actionEmployeeId]);
+
+  useEffect(() => {
+    if (!actionEmployeeId && filteredEmployees.length > 0) {
+      setActionEmployeeId(filteredEmployees[0].id.toString());
+    }
+  }, [filteredEmployees, actionEmployeeId]);
 
   const fetchUser = async () => {
     try {
-      const res = await api.get("/me");
+      const res = await api.get("/api/v1/me");
       setUser(res.data.data || res.data);
     } catch (err) {
       console.error("Failed to fetch user:", err);
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get("/api/v1/employees?per_page=200");
+      const data = res.data.data || res.data;
+      const list = Array.isArray(data) ? data : data.data || [];
+      setEmployees(list);
+    } catch (err) {
+      console.error("Failed to fetch employees:", err);
+      setError("Failed to load employees");
+    }
+  };
+
   const checkTodayStatus = async () => {
     try {
-      const res = await api.get("/attendances");
       const today = new Date().toISOString().split("T")[0];
-      const todayRecord = res.data.data?.find(
-        (a: AttendanceRecord) => a.date === today
-      ) || res.data?.find((a: AttendanceRecord) => a.date === today);
-      setTodayStatus(todayRecord || null);
+      const res = await api.get(`/api/v1/attendances?from=${today}&to=${today}&per_page=1`);
+      const data = res.data.data || res.data;
+      const items = Array.isArray(data) ? data : data.data || [];
+      setTodayStatus(items[0] || null);
     } catch (err) {
       console.error("Failed to check today status:", err);
+    }
+  };
+
+  const fetchTodayStatuses = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const res = await api.get(`/api/v1/attendances?from=${today}&to=${today}&per_page=200`);
+      const data = res.data.data || res.data;
+      const items = Array.isArray(data) ? data : data.data || [];
+      const map: Record<number, AttendanceRecord> = {};
+      items.forEach((item: AttendanceRecord) => {
+        map[item.employee_id] = item;
+      });
+      setTodayStatuses(map);
+    } catch (err) {
+      console.error("Failed to fetch today statuses:", err);
     }
   };
 
@@ -77,16 +169,32 @@ export default function AttendancePage() {
       });
       if (fromDate) params.append("from", fromDate);
       if (toDate) params.append("to", toDate);
+      if (employeeFilter) params.append("employee_id", employeeFilter);
 
-      const res = await api.get(`/attendances?${params}`);
+      const res = await api.get(`/api/v1/attendances?${params}`);
       const data = res.data.data || res.data;
 
+      const items = Array.isArray(data) ? data : data.data || [];
+      const enriched = items.map((item: AttendanceRecord) => {
+        if (!item.employee && employeeLookup[item.employee_id]) {
+          const emp = employeeLookup[item.employee_id];
+          return {
+            ...item,
+            employee: {
+              first_name: emp.first_name,
+              last_name: emp.last_name,
+            },
+          };
+        }
+        return item;
+      });
+
+      setAttendances(enriched);
+
       if (Array.isArray(data)) {
-        setAttendances(data);
         setTotalPages(1);
       } else {
-        setAttendances(data.data || []);
-        setTotalPages(data.last_page || 1);
+        setTotalPages((data.last_page as number) || data.meta?.last_page || 1);
       }
       setError("");
     } catch (err) {
@@ -100,10 +208,11 @@ export default function AttendancePage() {
   const handleClockIn = async () => {
     try {
       setClocking(true);
-      await api.post("/attendances/clock-in");
+      await api.post("/api/v1/attendances/clock-in");
       setSuccess("Clocked in successfully!");
       setTimeout(() => setSuccess(""), 3000);
       checkTodayStatus();
+      fetchTodayStatuses();
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to clock in");
     } finally {
@@ -114,14 +223,36 @@ export default function AttendancePage() {
   const handleClockOut = async () => {
     try {
       setClocking(true);
-      await api.post("/attendances/clock-out");
+      await api.post("/api/v1/attendances/clock-out");
       setSuccess("Clocked out successfully!");
       setTimeout(() => setSuccess(""), 3000);
       checkTodayStatus();
+      fetchTodayStatuses();
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to clock out");
     } finally {
       setClocking(false);
+    }
+  };
+
+  const handleAdminClock = async (type: "in" | "out") => {
+    if (!actionEmployeeId) {
+      setError("Please select an employee first");
+      return;
+    }
+    try {
+      setAdminClocking(true);
+      await api.post(`/api/v1/attendances/clock-${type}`, {
+        employee_id: Number(actionEmployeeId),
+      });
+      setSuccess(`Clocked ${type === "in" ? "in" : "out"} successfully!`);
+      setTimeout(() => setSuccess(""), 3000);
+      fetchTodayStatuses();
+      fetchAttendances();
+    } catch (err: any) {
+      setError(err.response?.data?.message || `Failed to clock ${type}`);
+    } finally {
+      setAdminClocking(false);
     }
   };
 
@@ -148,6 +279,11 @@ export default function AttendancePage() {
       return dateString;
     }
   };
+
+  const isAdminOrHr = user?.role === "admin" || user?.role === "hr";
+  const selectedAdminStatus = actionEmployeeId
+    ? todayStatuses[Number(actionEmployeeId)]
+    : null;
 
   return (
     <HRMSSidebar>
@@ -219,6 +355,81 @@ export default function AttendancePage() {
           )}
         </div>
 
+        {/* Admin clock controls */}
+        {isAdminOrHr && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-60">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search employee</label>
+                <input
+                  type="text"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  placeholder="Search by name, code, email, phone..."
+                  className="w-full px-4 py-2 mb-3 border border-gray-300  text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+                <select
+                  value={actionEmployeeId}
+                  onChange={(e) => setActionEmployeeId(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select employee</option>
+                  {filteredEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.last_name} ({emp.employee_code})
+                    </option>
+                  ))}
+                  {filteredEmployees.length === 0 && (
+                    <option value="" disabled>
+                      No matches
+                    </option>
+                  )}
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleAdminClock("in")}
+                  disabled={!actionEmployeeId || adminClocking}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  <Clock className="w-5 h-5" /> Clock In
+                </button>
+                <button
+                  onClick={() => handleAdminClock("out")}
+                  disabled={!actionEmployeeId || adminClocking}
+                  className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  <LogOutIcon className="w-5 h-5" /> Clock Out
+                </button>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-700 flex gap-6 flex-wrap">
+              <div>
+                <span className="font-medium">Today:</span>{" "}
+                {selectedAdminStatus?.check_in
+                  ? `In at ${formatTime(selectedAdminStatus.check_in)}`
+                  : "Not clocked in"}
+              </div>
+              <div>
+                <span className="font-medium">Check-out:</span>{" "}
+                {selectedAdminStatus?.check_out
+                  ? formatTime(selectedAdminStatus.check_out)
+                  : "Not clocked out"}
+              </div>
+              <div>
+                <span className="font-medium">Status:</span>{" "}
+                {selectedAdminStatus
+                  ? selectedAdminStatus.is_late
+                    ? "Late"
+                    : selectedAdminStatus.attendance_status || "On time"
+                  : "-"}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter Attendance</h3>
@@ -232,7 +443,7 @@ export default function AttendancePage() {
                   setFromDate(e.target.value);
                   setPage(1);
                 }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div className="flex-1 min-w-48">
@@ -244,8 +455,26 @@ export default function AttendancePage() {
                   setToDate(e.target.value);
                   setPage(1);
                 }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+            <div className="flex-1 min-w-48">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+              <select
+                value={employeeFilter}
+                onChange={(e) => {
+                  setEmployeeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All employees</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.first_name} {emp.last_name} ({emp.employee_code})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -295,6 +524,8 @@ export default function AttendancePage() {
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {record.employee
                           ? `${record.employee.first_name} ${record.employee.last_name}`
+                          : employeeLookup[record.employee_id]
+                          ? `${employeeLookup[record.employee_id].first_name} ${employeeLookup[record.employee_id].last_name}`
                           : "Unknown"}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{formatTime(record.check_in)}</td>

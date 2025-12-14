@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
@@ -10,7 +10,6 @@ import { ArrowLeft, User, Lock, Gift, Minus } from "lucide-react";
 type TabType = "personal" | "account" | "benefits" | "deductions";
 
 interface FormData {
-  // Personal Info
   employee_code: string;
   first_name: string;
   last_name: string;
@@ -24,16 +23,13 @@ interface FormData {
   start_date: string;
   salary: number;
   status: string;
-  // User Account
   password: string;
   confirm_password: string;
   role: string;
-  // Benefits
   health_insurance: boolean;
   retirement_plan: boolean;
   dental_coverage: boolean;
   vision_coverage: boolean;
-  // Deductions
   tax_percentage: number;
   social_security_percentage: number;
   health_insurance_deduction: number;
@@ -46,10 +42,14 @@ const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "deductions", label: "Deductions", icon: Minus },
 ];
 
-export default function CreateEmployeePage() {
+export default function EditEmployeePage() {
   const router = useRouter();
+  const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : (params as any)?.id;
+
   const [activeTab, setActiveTab] = useState<TabType>("personal");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formData, setFormData] = useState<FormData>({
@@ -82,10 +82,56 @@ export default function CreateEmployeePage() {
     const token = getToken();
     if (!token) {
       router.push("/auth/login");
+      return;
     }
-  }, [router]);
+    if (id) fetchEmployee(id);
+  }, [id, router]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const fetchEmployee = async (empId: string | number) => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await api.get(`/api/v1/employees/${empId}`);
+      const data = res.data.data || res.data;
+      setFormData((prev) => ({
+        ...prev,
+        employee_code: data.employee_code || "",
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        gender: data.gender || "male",
+        date_of_birth: data.date_of_birth || "",
+        address: data.address || "",
+        department: data.department || "",
+        position: data.position || "",
+        start_date: data.start_date || "",
+        salary: data.salary ?? 0,
+        status: data.status || "active",
+        role: data.role || data.user?.role || "employee",
+        // keep password empty for security
+        password: "",
+        confirm_password: "",
+        // optional nested
+        health_insurance: data.benefits?.health_insurance ?? false,
+        retirement_plan: data.benefits?.retirement_plan ?? false,
+        dental_coverage: data.benefits?.dental_coverage ?? false,
+        vision_coverage: data.benefits?.vision_coverage ?? false,
+        tax_percentage: data.deductions?.tax_percentage ?? 15,
+        social_security_percentage: data.deductions?.social_security_percentage ?? 6.2,
+        health_insurance_deduction: data.deductions?.health_insurance_deduction ?? 0,
+      }));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to load employee");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -101,12 +147,12 @@ export default function CreateEmployeePage() {
   };
 
   const validateForm = () => {
-    if (!formData.first_name || !formData.last_name) {
-      setError("First name and last name are required");
-      return false;
-    }
     if (!formData.employee_code) {
       setError("Employee code is required");
+      return false;
+    }
+    if (!formData.first_name || !formData.last_name) {
+      setError("First name and last name are required");
       return false;
     }
     if (!formData.email) {
@@ -121,11 +167,7 @@ export default function CreateEmployeePage() {
       setError("Salary must be greater than 0");
       return false;
     }
-    if (!formData.password) {
-      setError("Password is required");
-      return false;
-    }
-    if (formData.password !== formData.confirm_password) {
+    if (formData.password && formData.password !== formData.confirm_password) {
       setError("Passwords do not match");
       return false;
     }
@@ -137,15 +179,16 @@ export default function CreateEmployeePage() {
     if (!validateForm()) return;
 
     try {
-      setLoading(true);
+      setSaving(true);
       setError("");
+      setSuccess("");
 
       const payload = {
+        employee_code: formData.employee_code,
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
         phone: formData.phone,
-        employee_code: formData.employee_code,
         gender: formData.gender,
         date_of_birth: formData.date_of_birth,
         address: formData.address,
@@ -154,7 +197,6 @@ export default function CreateEmployeePage() {
         start_date: formData.start_date,
         salary: formData.salary,
         status: formData.status,
-        password: formData.password,
         role: formData.role,
         benefits: {
           health_insurance: formData.health_insurance,
@@ -167,34 +209,50 @@ export default function CreateEmployeePage() {
           social_security_percentage: formData.social_security_percentage,
           health_insurance_deduction: formData.health_insurance_deduction,
         },
-      };
+      } as any;
 
-      await api.post("/api/v1/employees", payload);
-      setSuccess("Employee created successfully!");
+      // only send password if provided
+      if (formData.password) {
+        payload.password = formData.password;
+      }
+
+      await api.put(`/api/v1/employees/${id}`, payload);
+      setSuccess("Employee updated successfully!");
       setTimeout(() => {
-        router.push("/employees");
-      }, 2000);
+        router.push(`/employees/${id}`);
+      }, 1200);
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to create employee");
       console.error(err);
+      setError(err.response?.data?.message || "Failed to update employee");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <HRMSSidebar>
       <div className="space-y-6">
         <button
-          onClick={() => router.push("/employees")}
+          onClick={() => router.push(id ? `/employees/${id}` : "/employees")}
           className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Employees
+          <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create New Employee</h1>
-          <p className="text-gray-500 mt-1">Fill in the employee details across multiple sections</p>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Employee</h1>
+          <p className="text-gray-500 mt-1">Update employee details across multiple sections</p>
         </div>
 
         {error && (
@@ -209,7 +267,6 @@ export default function CreateEmployeePage() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="flex gap-0 border-b border-gray-200">
             {tabs.map((tab) => {
@@ -232,7 +289,6 @@ export default function CreateEmployeePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Personal Info Tab */}
             {activeTab === "personal" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
@@ -385,7 +441,6 @@ export default function CreateEmployeePage() {
               </div>
             )}
 
-            {/* User Account Tab */}
             {activeTab === "account" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-900">User Account</h2>
@@ -405,37 +460,29 @@ export default function CreateEmployeePage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Password (leave blank to keep)</label>
                     <input
                       type="password"
                       name="password"
                       value={formData.password}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
                     <input
                       type="password"
                       name="confirm_password"
                       value={formData.confirm_password}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
                     />
                   </div>
-                </div>
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    💡 <strong>Tip:</strong> The employee will use their email as their login username along with the password you set here.
-                  </p>
                 </div>
               </div>
             )}
 
-            {/* Benefits Tab */}
             {activeTab === "benefits" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-900">Benefits</h2>
@@ -449,7 +496,7 @@ export default function CreateEmployeePage() {
                     />
                     <div>
                       <p className="font-medium text-gray-900">Health Insurance</p>
-                      <p className="text-sm text-gray-500">Comprehensive health coverage for the employee</p>
+                      <p className="text-sm text-gray-500">Comprehensive health coverage</p>
                     </div>
                   </label>
                   <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
@@ -461,7 +508,7 @@ export default function CreateEmployeePage() {
                     />
                     <div>
                       <p className="font-medium text-gray-900">Retirement Plan</p>
-                      <p className="text-sm text-gray-500">401(k) or pension plan enrollment</p>
+                      <p className="text-sm text-gray-500">401(k) or pension plan</p>
                     </div>
                   </label>
                   <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
@@ -473,7 +520,7 @@ export default function CreateEmployeePage() {
                     />
                     <div>
                       <p className="font-medium text-gray-900">Dental Coverage</p>
-                      <p className="text-sm text-gray-500">Dental care and treatment coverage</p>
+                      <p className="text-sm text-gray-500">Dental care coverage</p>
                     </div>
                   </label>
                   <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
@@ -485,14 +532,13 @@ export default function CreateEmployeePage() {
                     />
                     <div>
                       <p className="font-medium text-gray-900">Vision Coverage</p>
-                      <p className="text-sm text-gray-500">Eye care and glasses coverage</p>
+                      <p className="text-sm text-gray-500">Eye care coverage</p>
                     </div>
                   </label>
                 </div>
               </div>
             )}
 
-            {/* Deductions Tab */}
             {activeTab === "deductions" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-900">Deductions</h2>
@@ -539,21 +585,20 @@ export default function CreateEmployeePage() {
               </div>
             )}
 
-            {/* Submit Buttons */}
             <div className="flex gap-3 pt-6 border-t border-gray-200">
               <button
                 type="button"
-                onClick={() => router.push("/employees")}
+                onClick={() => router.push(id ? `/employees/${id}` : "/employees")}
                 className="flex-1 px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
               >
-                {loading ? "Creating..." : "Create Employee"}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </form>

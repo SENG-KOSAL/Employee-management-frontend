@@ -174,9 +174,12 @@ export default function EmployeesPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <a
+                          href={`/employees/${emp.id}/edit`}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
                           <Edit2 className="w-4 h-4" />
-                        </button>
+                        </a>
                         <button
                           onClick={() => handleDeleteEmployee(emp.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

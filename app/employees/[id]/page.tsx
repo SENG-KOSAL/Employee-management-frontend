@@ -130,3 +130,6 @@ export default function EmployeeDetailPage() {
     </HRMSSidebar>
   );
 }
+
+
+//this page is for view detail of a single employee
