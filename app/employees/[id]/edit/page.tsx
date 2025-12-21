@@ -23,6 +23,7 @@ interface FormData {
   start_date: string;
   salary: number;
   status: string;
+  name: string;
   password: string;
   confirm_password: string;
   role: string;
@@ -66,6 +67,7 @@ export default function EditEmployeePage() {
     start_date: "",
     salary: 0,
     status: "active",
+    name: "",
     password: "",
     confirm_password: "",
     role: "employee",
@@ -108,6 +110,7 @@ export default function EditEmployeePage() {
         start_date: data.start_date || "",
         salary: data.salary ?? 0,
         status: data.status || "active",
+        name: data.user?.name || data.full_name || "",
         role: data.role || data.user?.role || "employee",
         // keep password empty for security
         password: "",
@@ -197,6 +200,7 @@ export default function EditEmployeePage() {
         start_date: formData.start_date,
         salary: formData.salary,
         status: formData.status,
+        name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
         role: formData.role,
         benefits: {
           health_insurance: formData.health_insurance,
@@ -445,6 +449,17 @@ export default function EditEmployeePage() {
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-900">User Account</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder={`${formData.first_name} ${formData.last_name}`.trim() || "e.g. john.doe"}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                     <select

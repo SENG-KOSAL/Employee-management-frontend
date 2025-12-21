@@ -9,6 +9,12 @@ import { ArrowLeft, User, Lock, Gift, Minus } from "lucide-react";
 
 type TabType = "personal" | "account" | "benefits" | "deductions";
 
+type DepartmentOption = {
+  id: number;
+  name: string;
+  status?: "active" | "inactive";
+};
+
 interface FormData {
   // Personal Info
   employee_code: string;
@@ -25,6 +31,7 @@ interface FormData {
   salary: number;
   status: string;
   // User Account
+  name: string;
   password: string;
   confirm_password: string;
   role: string;
@@ -52,6 +59,9 @@ export default function CreateEmployeePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [departmentError, setDepartmentError] = useState("");
   const [formData, setFormData] = useState<FormData>({
     employee_code: "",
     first_name: "",
@@ -66,6 +76,7 @@ export default function CreateEmployeePage() {
     start_date: "",
     salary: 0,
     status: "active",
+    name: "",
     password: "",
     confirm_password: "",
     role: "employee",
@@ -82,7 +93,33 @@ export default function CreateEmployeePage() {
     const token = getToken();
     if (!token) {
       router.push("/auth/login");
+      return;
     }
+
+    const loadDepartments = async () => {
+      try {
+        setDepartmentsLoading(true);
+        const res = await api.get("/api/v1/departments");
+        const list = (res.data?.data ?? []) as any[];
+        const normalized: DepartmentOption[] = Array.isArray(list)
+          ? list
+              .filter((d) => d && typeof d.name === "string")
+              .map((d) => ({
+                id: Number(d.id),
+                name: String(d.name),
+                status: d.status === "inactive" ? "inactive" : "active",
+              }))
+          : [];
+        setDepartments(normalized);
+      } catch {
+        // if API fails, keep list empty (selection-only)
+        setDepartments([]);
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    };
+
+    loadDepartments();
   }, [router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -100,40 +137,72 @@ export default function CreateEmployeePage() {
     }));
   };
 
+  const activeDepartments = departments.filter((d) => (d.status ?? "active") === "active");
+  const isValidDepartmentName = (name: string) => activeDepartments.some((d) => d.name === name);
+
   const validateForm = () => {
+    setDepartmentError("");
     if (!formData.first_name || !formData.last_name) {
       setError("First name and last name are required");
       return false;
     }
-    if (!formData.employee_code) {
-      setError("Employee code is required");
+    const missing: string[] = [];
+    const employeeCode = String(formData.employee_code ?? "").trim();
+    const firstName = String(formData.first_name ?? "").trim();
+    const lastName = String(formData.last_name ?? "").trim();
+    const email = String(formData.email ?? "").trim();
+    const phone = String(formData.phone ?? "").trim();
+    const dateOfBirth = String(formData.date_of_birth ?? "").trim();
+    const address = String(formData.address ?? "").trim();
+    const department = String(formData.department ?? "").trim();
+    const position = String(formData.position ?? "").trim();
+    const startDate = String(formData.start_date ?? "").trim();
+    const status = String(formData.status ?? "").trim();
+    const accountName = String(formData.name ?? "").trim();
+    const role = String(formData.role ?? "").trim();
+    const password = String(formData.password ?? "");
+    const confirmPassword = String(formData.confirm_password ?? "");
+    const salaryValue = Number(formData.salary);
+
+    if (!employeeCode) missing.push("Employee Code");
+    if (!firstName) missing.push("First Name");
+    if (!lastName) missing.push("Last Name");
+    if (!email) missing.push("Email");
+    if (!phone) missing.push("Phone");
+    if (!dateOfBirth) missing.push("Date of Birth");
+    if (!address) missing.push("Address");
+    if (!department) missing.push("Department");
+    if (!position) missing.push("Position");
+    if (!startDate) missing.push("Start Date");
+    if (!Number.isFinite(salaryValue) || salaryValue <= 0) missing.push("Salary");
+    if (!status) missing.push("Status");
+    if (!accountName) missing.push("User Account Name");
+    if (!role) missing.push("Role");
+    if (!password) missing.push("Password");
+    if (!confirmPassword) missing.push("Confirm Password");
+
+    if (missing.length > 0) {
+      setError(`Please fill all required fields: ${missing.join(", ")}`);
       return false;
     }
-    if (!formData.email) {
-      setError("Email is required");
-      return false;
-    }
-    if (!formData.start_date) {
-      setError("Start date is required");
-      return false;
-    }
-    if (!formData.salary || formData.salary <= 0) {
-      setError("Salary must be greater than 0");
-      return false;
-    }
-    if (!formData.password) {
-      setError("Password is required");
-      return false;
-    }
-    if (formData.password !== formData.confirm_password) {
+
+    if (password !== confirmPassword) {
       setError("Passwords do not match");
       return false;
     }
+
+    if (!isValidDepartmentName(department)) {
+      setDepartmentError("Please select a department from the list.");
+      setError("Please select a valid department");
+      return false;
+    }
+
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDepartmentError("");
     if (!validateForm()) return;
 
     try {
@@ -154,6 +223,7 @@ export default function CreateEmployeePage() {
         start_date: formData.start_date,
         salary: formData.salary,
         status: formData.status,
+        name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
         password: formData.password,
         role: formData.role,
         benefits: {
@@ -330,9 +400,35 @@ export default function CreateEmployeePage() {
                       type="text"
                       name="department"
                       value={formData.department}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setDepartmentError("");
+                        setFormData((prev) => ({ ...prev, department: e.target.value }));
+                      }}
+                      onBlur={(e) => {
+                        const value = e.currentTarget.value.trim();
+                        if (!value) return;
+                        if (!isValidDepartmentName(value)) {
+                          setDepartmentError("Please select a department from the list.");
+                          setFormData((prev) => ({ ...prev, department: "" }));
+                        }
+                      }}
+                      list="department-options"
+                      placeholder={
+                        departmentsLoading
+                          ? "Loading departments..."
+                          : activeDepartments.length === 0
+                            ? "No departments available"
+                            : "Search and select a department"
+                      }
+                      disabled={departmentsLoading || activeDepartments.length === 0}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                     />
+                    <datalist id="department-options">
+                      {activeDepartments.map((d) => (
+                        <option key={d.id} value={d.name} />
+                      ))}
+                    </datalist>
+                    {departmentError ? <p className="mt-1 text-sm text-red-600">{departmentError}</p> : null}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
@@ -391,6 +487,17 @@ export default function CreateEmployeePage() {
                 <h2 className="text-lg font-semibold text-gray-900">User Account</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder={`${formData.first_name} ${formData.last_name}`.trim() || "e.g. john.doe"}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                     <select
                       name="role"
@@ -429,7 +536,7 @@ export default function CreateEmployeePage() {
                 </div>
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
-                    💡 <strong>Tip:</strong> The employee will use their email as their login username along with the password you set here.
+                    💡 <strong>Tip:</strong> The employee will log in using <strong>Name</strong> and the password you set here.
                   </p>
                 </div>
               </div>

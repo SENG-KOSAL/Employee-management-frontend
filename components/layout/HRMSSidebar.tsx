@@ -3,6 +3,7 @@
 import type * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
 import {
   LayoutDashboard,
   Users,
@@ -15,6 +16,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
+  LogOut,
 } from "lucide-react"
 
 import {
@@ -37,6 +39,16 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import api from "@/services/api"
+import { getToken, removeToken } from "@/utils/auth"
+import { useRouter } from "next/navigation"
+
+type MePayload = {
+  name?: string
+  employee?: {
+    full_name?: string | null
+  } | null
+}
 
 // Navigation structure
 const navigation = {
@@ -206,6 +218,48 @@ function CollapseToggle() {
 }
 
 export function HRMSSidebar({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const [displayName, setDisplayName] = useState<string>("")
+
+  const initials = useMemo(() => {
+    const raw = displayName.trim()
+    if (!raw) return "--"
+    const parts = raw.split(/\s+/).filter(Boolean)
+    const first = parts[0]?.[0] ?? ""
+    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : ""
+    return (first + second).toUpperCase() || "--"
+  }, [displayName])
+
+  useEffect(() => {
+    const token = getToken()
+    if (!token) return
+
+    const loadMe = async () => {
+      try {
+        const res = await api.get("/api/v1/me")
+        const data: any = res.data?.data ?? res.data
+        const me: MePayload = data ?? {}
+        const name = me.employee?.full_name || me.name || ""
+        setDisplayName(name)
+      } catch {
+        // ignore; we'll just show initials placeholder
+      }
+    }
+
+    loadMe()
+  }, [])
+
+  const handleLogout = async () => {
+    try {
+      await api.post("/api/v1/logout")
+    } catch {
+      // ignore network/API errors; still clear local token
+    } finally {
+      removeToken()
+      router.push("/auth/login")
+    }
+  }
+
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r border-gray-200 bg-white">
@@ -245,8 +299,28 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex size-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-medium">
-              JD
+            <div className="relative group">
+              <div className="flex items-center gap-3">
+                <div className="flex size-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-medium">
+                  {initials}
+                </div>
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">
+                  {displayName || "Account"}
+                </span>
+              </div>
+
+              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-sm font-medium text-gray-900 truncate">{displayName || "Account"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <LogOut className="size-4" /> Logout
+                </button>
+              </div>
             </div>
           </div>
         </header>
