@@ -8,16 +8,16 @@ export type CreateLeaveTypeInput = {
 }
 
 export const leaveTypesService = {
-  list: () => clientFetch<LeaveType[]>('/api/leave-types', { method: 'GET' }),
+  list: () => clientFetch<LeaveType[]>('/api/v1/leave-types', { method: 'GET' }),
 
   create: (input: CreateLeaveTypeInput) =>
-    clientFetch<LeaveType>('/api/leave-types', {
+    clientFetch<LeaveType>('/api/v1/leave-types', {
       method: 'POST',
-      data: JSON.stringify(input),
+      data: input,
     }),
 
   remove: (id: number) =>
-    clientFetch<{ success: boolean }>(`/api/leave-types/${id}`, {
+    clientFetch<{ success: boolean }>(`/api/v1/leave-types/${id}`, {
       method: 'DELETE',
     }),
 }
