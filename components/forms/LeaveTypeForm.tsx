@@ -40,7 +40,7 @@ export default function LeaveTypeForm(props: {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Annual Leave"
-          style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
+          style={{ width: '100%', padding: 8,  borderRadius: 6, border: '1px solid #000104ff' }}
         />
       </div>
 
@@ -50,7 +50,7 @@ export default function LeaveTypeForm(props: {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="e.g. AL"
-          style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
+          style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #000000ff' }}
         />
       </div>
 

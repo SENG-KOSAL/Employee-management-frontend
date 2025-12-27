@@ -17,7 +17,8 @@ export default function LeaveTypesPage() {
     setLoading(true)
     try {
       const response = await leaveTypesService.list()
-      setRows(response.data)
+      const items = (response as any)?.data?.data ?? (response as any)?.data ?? []
+      setRows(Array.isArray(items) ? items : [])
     } catch (e: any) {
       setError(e?.message || 'Failed to load leave types')
     } finally {
@@ -43,7 +44,7 @@ export default function LeaveTypesPage() {
   return (
     <HRMSSidebar>
       <div className="space-y-6">
-        <PageHeader title="Leave Types" description="Define leave types (paid/unpaid) used in requests." backHref="/dashboard/settings" backLabel="← Settings" />
+        <PageHeader title="Leave Types" description="Define leave types (paid/unpaid) used in requests." backHref="/settings" backLabel="← Settings" />
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <LeaveTypeForm onCreate={create} />
