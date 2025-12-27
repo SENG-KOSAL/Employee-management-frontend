@@ -43,7 +43,7 @@ export default function DepartmentsPage() {
   return (
     <HRMSSidebar>
       <div className="space-y-6">
-        <PageHeader title="Departments" description="Create and manage departments." backHref="/dashboard/settings" backLabel="← Settings" />
+        <PageHeader title="Departments" description="Create and manage departments." backHref="/settings" backLabel="← Settings" />
 
       {error ? (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">{error}</div>
