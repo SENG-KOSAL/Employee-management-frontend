@@ -6,9 +6,11 @@ import { useRouter, useParams } from "next/navigation";
 import api from "@/services/api";
 import { benefitsService } from "@/services/benefits";
 import { leaveAllocationsService } from "@/services/leaveAllocations";
+import { leaveTypesService } from "@/services/leaveTypes";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock } from "lucide-react";
+import type { LeaveType } from "@/types/hr";
 
 interface CatalogItem {
   id?: number | string;
@@ -68,6 +70,24 @@ export default function EmployeeDetailPage() {
   const [assignError, setAssignError] = useState("");
   const [selectedBenefitId, setSelectedBenefitId] = useState<string>("");
   const [selectedDeductionId, setSelectedDeductionId] = useState<string>("");
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
+  const [leaveTypesError, setLeaveTypesError] = useState("");
+  const [selectedLeaveTypeId, setSelectedLeaveTypeId] = useState<string>("");
+  const [allocationYear, setAllocationYear] = useState<string>(String(new Date().getFullYear()));
+  const [allocationDays, setAllocationDays] = useState<string>("");
+  const [allocationNote, setAllocationNote] = useState<string>("");
+  const [savingAllocation, setSavingAllocation] = useState(false);
+  const [allocationError, setAllocationError] = useState<string>("");
+  const [allocationEdits, setAllocationEdits] = useState<Record<number, {
+    leave_type_id: number;
+    year: number;
+    days_allocated: number;
+    days_used?: number;
+    note?: string;
+  }>>({});
+  const [savingAllocationId, setSavingAllocationId] = useState<number | null>(null);
+  const [editingAllocationId, setEditingAllocationId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -76,7 +96,24 @@ export default function EmployeeDetailPage() {
       return;
     }
     if (id) fetchEmployee(id);
+    loadLeaveTypes();
   }, [id, router]);
+
+  const loadLeaveTypes = async () => {
+    try {
+      setLeaveTypesLoading(true);
+      setLeaveTypesError("");
+      const res = await leaveTypesService.list();
+      const list = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setLeaveTypes(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error(err);
+      setLeaveTypesError("Failed to load leave types");
+      setLeaveTypes([]);
+    } finally {
+      setLeaveTypesLoading(false);
+    }
+  };
 
   const fetchEmployee = async (empId: string | number) => {
     try {
@@ -146,6 +183,19 @@ export default function EmployeeDetailPage() {
       });
       const allocList = allocRes ? (allocRes as any)?.data?.data ?? (allocRes as any)?.data ?? [] : [];
       setAllocations(Array.isArray(allocList) ? allocList : []);
+      const edits: Record<number, { leave_type_id: number; year: number; days_allocated: number; days_used?: number; note?: string }> = {};
+      (Array.isArray(allocList) ? allocList : []).forEach((alloc: any) => {
+        if (alloc?.id !== undefined) {
+          edits[alloc.id] = {
+            leave_type_id: Number(alloc.leave_type_id),
+            year: Number(alloc.year ?? new Date().getFullYear()),
+            days_allocated: Number(alloc.days_allocated ?? 0),
+            days_used: Number(alloc.days_used ?? 0),
+            note: alloc.note ?? "",
+          };
+        }
+      });
+      setAllocationEdits(edits);
       setError("");
     } catch (err) {
       console.error(err);
@@ -237,6 +287,59 @@ export default function EmployeeDetailPage() {
     return `${Number(value).toFixed(1)}%`;
   };
 
+  const getDefaultDaysForLeaveType = (leaveTypeId?: string) => {
+    const ltId = Number(leaveTypeId);
+    const selected = leaveTypes.find((lt: any) => Number(lt.id) === ltId);
+    const fallback = selected?.default_days ?? selected?.days_per_year ?? 0;
+    return Number.isFinite(Number(fallback)) ? Number(fallback) : 0;
+  };
+
+  const handleAssignLeave = async () => {
+    if (!employee?.id || !selectedLeaveTypeId) return;
+    try {
+      setSavingAllocation(true);
+      setAllocationError("");
+      const defaultDays = getDefaultDaysForLeaveType(selectedLeaveTypeId);
+      const payload = {
+        employee_id: Number(employee.id),
+        leave_type_id: Number(selectedLeaveTypeId),
+        year: Number(allocationYear) || new Date().getFullYear(),
+        days_allocated: Number(allocationDays || defaultDays),
+        note: allocationNote || undefined,
+      };
+      const res = await leaveAllocationsService.create(payload as any);
+      const createdRaw = (res as any)?.data?.data ?? (res as any)?.data ?? payload;
+      const selected = leaveTypes.find((lt) => Number(lt.id) === Number(selectedLeaveTypeId));
+      const leaveTypeData = createdRaw.leave_type ?? selected ?? (createdRaw.leave_type_id ? { id: Number(selectedLeaveTypeId), name: selected?.name } : undefined);
+      const created = {
+        ...createdRaw,
+        leave_type: leaveTypeData,
+      };
+      setAllocations((prev) => [created, ...prev]);
+      if (created?.id !== undefined) {
+        setAllocationEdits((prev) => ({
+          ...prev,
+          [created.id]: {
+            leave_type_id: Number(created.leave_type_id),
+            year: Number(created.year ?? new Date().getFullYear()),
+            days_allocated: Number(created.days_allocated ?? 0),
+            days_used: Number(created.days_used ?? 0),
+            note: created.note ?? "",
+          },
+        }));
+      }
+      setAllocationYear(String(new Date().getFullYear()));
+      setAllocationDays("");
+      setAllocationNote("");
+      setSelectedLeaveTypeId("");
+    } catch (err: any) {
+      console.error(err);
+      setAllocationError(err?.response?.data?.message || "Failed to assign leave type");
+    } finally {
+      setSavingAllocation(false);
+    }
+  };
+
   const renderCatalogLine = (item: CatalogItem) => {
     const label = item.benefit_name || item.deduction_name || item.name || "-";
     const amount = item.type === "percentage" ? `${item.amount ?? 0}%` : `$${item.amount ?? 0}`;
@@ -256,6 +359,77 @@ export default function EmployeeDetailPage() {
         </span>
       </div>
     );
+  };
+
+  const handleAllocationEditChange = (
+    id: number,
+    field: keyof { leave_type_id: number; year: number; days_allocated: number; days_used?: number; note?: string },
+    value: string
+  ) => {
+    setAllocationEdits((prev) => ({
+      ...prev,
+      [id]: {
+        leave_type_id: Number(field === "leave_type_id" ? value : prev[id]?.leave_type_id ?? 0),
+        year: Number(field === "year" ? value : prev[id]?.year ?? new Date().getFullYear()),
+        days_allocated: Number(field === "days_allocated" ? value : prev[id]?.days_allocated ?? 0),
+        days_used: Number(field === "days_used" ? value : prev[id]?.days_used ?? 0),
+        note: field === "note" ? value : prev[id]?.note ?? "",
+      },
+    }));
+  };
+
+  const handleUpdateAllocation = async (id: number) => {
+    const edit = allocationEdits[id];
+    if (!edit) return;
+    try {
+      setSavingAllocationId(id);
+      setAllocationError("");
+      const res = await leaveAllocationsService.update(id, {
+        leave_type_id: edit.leave_type_id,
+        year: edit.year,
+        days_allocated: edit.days_allocated,
+        days_used: edit.days_used,
+        note: edit.note,
+      } as any);
+      const updatedRaw = (res as any)?.data?.data ?? (res as any)?.data ?? edit;
+      const selected = leaveTypes.find((lt) => Number(lt.id) === Number(edit.leave_type_id));
+      const leaveTypeData = updatedRaw.leave_type ?? selected ?? (updatedRaw.leave_type_id ? { id: edit.leave_type_id, name: selected?.name } : undefined);
+      const updated = { ...updatedRaw, leave_type: leaveTypeData };
+      setAllocations((prev) => prev.map((alloc) => (Number(alloc.id) === Number(id) ? { ...alloc, ...updated } : alloc)));
+      setEditingAllocationId(null);
+    } catch (err: any) {
+      console.error(err);
+      setAllocationError(err?.response?.data?.message || "Failed to update allocation");
+    } finally {
+      setSavingAllocationId(null);
+    }
+  };
+
+  const beginEditAllocation = (alloc: any) => {
+    if (alloc?.id === undefined) return;
+    const base = {
+      leave_type_id: Number(alloc.leave_type_id),
+      year: Number(alloc.year ?? new Date().getFullYear()),
+      days_allocated: Number(alloc.days_allocated ?? 0),
+      days_used: Number(alloc.days_used ?? 0),
+      note: alloc.note ?? "",
+    };
+    setAllocationEdits((prev) => ({ ...prev, [alloc.id]: prev[alloc.id] ?? base }));
+    setEditingAllocationId(alloc.id);
+  };
+
+  const cancelEditAllocation = (alloc: any) => {
+    if (alloc?.id === undefined) return;
+    const reset = {
+      leave_type_id: Number(alloc.leave_type_id),
+      year: Number(alloc.year ?? new Date().getFullYear()),
+      days_allocated: Number(alloc.days_allocated ?? 0),
+      days_used: Number(alloc.days_used ?? 0),
+      note: alloc.note ?? "",
+    };
+    setAllocationEdits((prev) => ({ ...prev, [alloc.id]: reset }));
+    setEditingAllocationId(null);
+    setAllocationError("");
   };
 
   if (loading) {
@@ -465,28 +639,183 @@ export default function EmployeeDetailPage() {
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-gray-800">Attendance & Leave</h3>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                      Leave allocations are shown below. Use edit to add or change the default leave type.
+                      Leave allocations are shown below. Use the form to add or change the default leave type for this employee.
+                    </div>
+                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                      <div className="flex flex-wrap gap-3 items-end">
+                        <div className="min-w-48 flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Leave type</label>
+                          <select
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={selectedLeaveTypeId}
+                            onChange={(e) => {
+                              setSelectedLeaveTypeId(e.target.value);
+                              if (!allocationDays) {
+                                const nextDefault = getDefaultDaysForLeaveType(e.target.value);
+                                setAllocationDays(nextDefault ? String(nextDefault) : "");
+                              }
+                            }}
+                            disabled={leaveTypesLoading}
+                          >
+                            <option value="">Select leave type</option>
+                            {leaveTypes.map((lt: any) => (
+                              <option key={lt.id} value={lt.id}>
+                                {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"}
+                              </option>
+                            ))}
+                          </select>
+                          {leaveTypesError && <p className="text-xs text-red-600 mt-1">{leaveTypesError}</p>}
+                        </div>
+                        <div className="min-w-32">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Year</label>
+                          <input
+                            type="number"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={allocationYear}
+                            onChange={(e) => setAllocationYear(e.target.value)}
+                          />
+                        </div>
+                        <div className="min-w-32">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Days</label>
+                          <input
+                            type="number"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={allocationDays}
+                            onChange={(e) => setAllocationDays(e.target.value)}
+                            placeholder={selectedLeaveTypeId ? String(getDefaultDaysForLeaveType(selectedLeaveTypeId)) : ""}
+                          />
+                        </div>
+                        <div className="min-w-48 flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Note (optional)</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={allocationNote}
+                            onChange={(e) => setAllocationNote(e.target.value)}
+                            placeholder="e.g., Default annual leave"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAssignLeave}
+                          disabled={savingAllocation || !selectedLeaveTypeId}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingAllocation ? "Saving..." : "Assign"}
+                        </button>
+                      </div>
+                      {allocationError && <p className="text-sm text-red-600">{allocationError}</p>}
                     </div>
                     {Array.isArray(allocations) && allocations.length ? (
                       <div className="space-y-3">
                         {allocations.map((alloc) => (
                           <div key={alloc.id ?? `${alloc.leave_type_id}-${alloc.start_date ?? ""}`}
                             className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 flex items-center justify-between">
-                            <div className="space-y-1">
-                              <p className="font-medium text-gray-900">{alloc.leave_type?.name || "Leave Type"}</p>
-                              <p className="text-xs text-gray-500">Type ID: {alloc.leave_type_id}</p>
-                              <p className="text-xs text-gray-500">Year: {alloc.year ?? "-"}</p>
-                              <p className="text-xs text-gray-500">Days: used {alloc.days_used ?? 0} / allocated {alloc.days_allocated ?? 0}</p>
-                              {alloc.start_date || alloc.end_date ? (
-                                <p className="text-xs text-gray-500">{alloc.start_date} {alloc.end_date && alloc.end_date !== alloc.start_date ? `→ ${alloc.end_date}` : ""}</p>
-                              ) : null}
-                              {alloc.note ? <p className="text-xs text-gray-500">Note: {alloc.note}</p> : null}
-                            </div>
-                            {alloc.leave_type?.is_paid !== undefined ? (
-                              <span className={`text-xs px-2 py-1 rounded-full border ${alloc.leave_type.is_paid ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-                                {alloc.leave_type.is_paid ? "Paid" : "Unpaid"}
-                              </span>
-                            ) : null}
+                            {editingAllocationId === alloc.id ? (
+                              <div className="space-y-2 flex-1">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-700">Leave type</label>
+                                    <select
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                                      value={allocationEdits[alloc.id!]?.leave_type_id ?? alloc.leave_type_id}
+                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "leave_type_id", e.target.value)}
+                                    >
+                                      {leaveTypes.map((lt) => (
+                                        <option key={lt.id} value={lt.id}>
+                                          {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-700">Year</label>
+                                    <input
+                                      type="number"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                                      value={allocationEdits[alloc.id!]?.year ?? alloc.year ?? ""}
+                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "year", e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-700">Days allocated</label>
+                                    <input
+                                      type="number"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                                      value={allocationEdits[alloc.id!]?.days_allocated ?? alloc.days_allocated ?? ""}
+                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "days_allocated", e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-700">Days used</label>
+                                    <input
+                                      type="number"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                                      value={allocationEdits[alloc.id!]?.days_used ?? alloc.days_used ?? 0}
+                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "days_used", e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs font-semibold text-gray-700">Note</label>
+                                  <input
+                                    type="text"
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                                    value={allocationEdits[alloc.id!]?.note ?? alloc.note ?? ""}
+                                    onChange={(e) => handleAllocationEditChange(alloc.id!, "note", e.target.value)}
+                                    placeholder="Optional note"
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-gray-500">Type ID: {alloc.leave_type_id}</p>
+                                  <div className="flex items-center gap-2">
+                                    {alloc.leave_type?.is_paid !== undefined ? (
+                                      <span className={`text-xs px-2 py-1 rounded-full border ${alloc.leave_type.is_paid ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                        {alloc.leave_type.is_paid ? "Paid" : "Unpaid"}
+                                      </span>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateAllocation(alloc.id!)}
+                                      disabled={savingAllocationId === alloc.id}
+                                      className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {savingAllocationId === alloc.id ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => cancelEditAllocation(alloc)}
+                                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-md border border-gray-300 hover:bg-gray-200"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex-1 flex items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                  <p className="font-medium text-gray-900">{alloc.leave_type?.name || "Leave Type"}</p>
+                                  <p className="text-xs text-gray-500">Year: {alloc.year ?? "-"}</p>
+                                  <p className="text-xs text-gray-500">Days: used {alloc.days_used ?? 0} / allocated {alloc.days_allocated ?? 0}</p>
+                                  {alloc.note ? <p className="text-xs text-gray-500">Note: {alloc.note}</p> : null}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {alloc.leave_type?.is_paid !== undefined ? (
+                                    <span className={`text-xs px-2 py-1 rounded-full border ${alloc.leave_type.is_paid ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                      {alloc.leave_type.is_paid ? "Paid" : "Unpaid"}
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => beginEditAllocation(alloc)}
+                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md shadow-sm hover:bg-blue-700"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
