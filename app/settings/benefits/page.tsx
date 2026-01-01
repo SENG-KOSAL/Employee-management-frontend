@@ -28,6 +28,8 @@ export default function BenefitsPage() {
             ...b,
             name: b?.benefit_name ?? b?.name ?? 'Benefit',
             amount: Number(b?.amount ?? 0),
+            amountType: b?.type,
+            type: b?.type,
           }))
         : []
       const normalizedDeductions = Array.isArray(deductionsItems)
@@ -35,6 +37,8 @@ export default function BenefitsPage() {
             ...d,
             name: d?.deduction_name ?? d?.name ?? 'Deduction',
             amount: Number(d?.amount ?? 0),
+            amountType: d?.type,
+            type: d?.type,
           }))
         : []
 
@@ -134,7 +138,7 @@ export default function BenefitsPage() {
                 width: 120,
                 render: (r) => (
                   <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
-                    {r.type === 'percentage' ? 'Percent' : 'Fixed'}
+                    {(r as any).amountType === 'percentage' || (r as any).type === 'percentage' ? 'Percent' : 'Fixed'}
                   </span>
                 ),
               },
@@ -172,7 +176,7 @@ export default function BenefitsPage() {
                 width: 120,
                 render: (r) => (
                   <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    {r.type === 'percentage' ? 'Percent' : 'Fixed'}
+                    {(r as any).amountType === 'percentage' || (r as any).type === 'percentage' ? 'Percent' : 'Fixed'}
                   </span>
                 ),
               },
