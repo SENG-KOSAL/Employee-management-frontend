@@ -51,6 +51,7 @@ export default function AttendancePage() {
   const [todayStatuses, setTodayStatuses] = useState<Record<number, AttendanceRecord>>({});
   const [clocking, setClocking] = useState(false);
   const [adminClocking, setAdminClocking] = useState(false);
+  const [rowClockingId, setRowClockingId] = useState<number | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const employeeLookup = useMemo(() => {
@@ -208,7 +209,10 @@ export default function AttendancePage() {
   const handleClockIn = async () => {
     try {
       setClocking(true);
-      await api.post("/api/v1/attendances/clock-in");
+      const res = await api.post("/api/v1/attendances/clock-in");
+      const data = res?.data?.data ?? res?.data ?? null;
+      if (data) setTodayStatus((prev: any) => ({ ...prev, ...data }));
+      else setTodayStatus((prev: any) => ({ ...prev, check_in: new Date().toISOString() }));
       setSuccess("Clocked in successfully!");
       setTimeout(() => setSuccess(""), 3000);
       checkTodayStatus();
@@ -223,7 +227,10 @@ export default function AttendancePage() {
   const handleClockOut = async () => {
     try {
       setClocking(true);
-      await api.post("/api/v1/attendances/clock-out");
+      const res = await api.post("/api/v1/attendances/clock-out");
+      const data = res?.data?.data ?? res?.data ?? null;
+      if (data) setTodayStatus((prev: any) => ({ ...prev, ...data }));
+      else setTodayStatus((prev: any) => ({ ...prev, check_out: new Date().toISOString() }));
       setSuccess("Clocked out successfully!");
       setTimeout(() => setSuccess(""), 3000);
       checkTodayStatus();
@@ -242,9 +249,19 @@ export default function AttendancePage() {
     }
     try {
       setAdminClocking(true);
-      await api.post(`/api/v1/attendances/clock-${type}`, {
+      const res = await api.post(`/api/v1/attendances/clock-${type}`, {
         employee_id: Number(actionEmployeeId),
       });
+      const data = res?.data?.data ?? res?.data ?? null;
+      if (data) {
+        setTodayStatuses((prev) => ({
+          ...prev,
+          [Number(actionEmployeeId)]: {
+            ...(prev[Number(actionEmployeeId)] || { employee_id: Number(actionEmployeeId) }),
+            ...data,
+          },
+        }));
+      }
       setSuccess(`Clocked ${type === "in" ? "in" : "out"} successfully!`);
       setTimeout(() => setSuccess(""), 3000);
       fetchTodayStatuses();
@@ -253,6 +270,40 @@ export default function AttendancePage() {
       setError(err.response?.data?.message || `Failed to clock ${type}`);
     } finally {
       setAdminClocking(false);
+    }
+  };
+
+  const handleRowClock = async (type: "in" | "out", employeeId: number) => {
+    try {
+      setAdminClocking(true);
+      setRowClockingId(employeeId);
+      const res = await api.post(`/api/v1/attendances/clock-${type}`, {
+        employee_id: Number(employeeId),
+      });
+      const data = res?.data?.data ?? res?.data ?? null;
+      if (data) {
+        setTodayStatuses((prev) => ({
+          ...prev,
+          [employeeId]: { ...(prev[employeeId] || { employee_id: employeeId }), ...data },
+        }));
+      } else {
+        const stamp = new Date().toISOString();
+        setTodayStatuses((prev) => ({
+          ...prev,
+          [employeeId]: {
+            ...(prev[employeeId] || { employee_id: employeeId }),
+            [type === "in" ? "check_in" : "check_out"]: stamp,
+          },
+        }));
+      }
+      setSuccess(`Clocked ${type === "in" ? "in" : "out"} successfully!`);
+      setTimeout(() => setSuccess(""), 3000);
+      fetchAttendances();
+    } catch (err: any) {
+      setError(err.response?.data?.message || `Failed to clock ${type}`);
+    } finally {
+      setAdminClocking(false);
+      setRowClockingId(null);
     }
   };
 
@@ -321,18 +372,26 @@ export default function AttendancePage() {
               <button
                 onClick={handleClockIn}
                 disabled={!!todayStatus?.check_in || clocking}
-                className="flex items-center gap-2 bg-white text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                className="flex items-center gap-2 bg-white text-blue-700 px-6 py-3 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all font-semibold"
               >
                 <Clock className="w-5 h-5" />
-                {clocking ? "Processing..." : "Clock In"}
+                {todayStatus?.check_in
+                  ? `In at ${formatTime(todayStatus.check_in)}`
+                  : clocking
+                  ? "Processing..."
+                  : "Clock In"}
               </button>
               <button
                 onClick={handleClockOut}
                 disabled={!todayStatus?.check_in || !!todayStatus?.check_out || clocking}
-                className="flex items-center gap-2 bg-white text-red-600 px-6 py-3 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                className="flex items-center gap-2 bg-white text-red-700 px-6 py-3 rounded-xl shadow-sm hover:shadow-md hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all font-semibold"
               >
                 <LogOutIcon className="w-5 h-5" />
-                {clocking ? "Processing..." : "Clock Out"}
+                {todayStatus?.check_out
+                  ? `Out at ${formatTime(todayStatus.check_out)}`
+                  : clocking
+                  ? "Processing..."
+                  : "Clock Out"}
               </button>
             </div>
           </div>
@@ -528,9 +587,31 @@ export default function AttendancePage() {
                           ? `${employeeLookup[record.employee_id].first_name} ${employeeLookup[record.employee_id].last_name}`
                           : "Unknown"}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{formatTime(record.check_in)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        {record.check_out ? formatTime(record.check_out) : "Not clocked out"}
+                        <button
+                          onClick={() => handleRowClock("in", record.employee_id)}
+                          disabled={!!todayStatuses[record.employee_id]?.check_in || adminClocking}
+                          className="flex items-center justify-center gap-2 px-3 py-1.5 border border-blue-200 text-blue-700 rounded-lg bg-white hover:border-blue-300 hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
+                        >
+                          {todayStatuses[record.employee_id]?.check_in
+                            ? `In ${formatTime(todayStatuses[record.employee_id].check_in)}`
+                            : adminClocking && rowClockingId === record.employee_id
+                            ? "Processing..."
+                            : "Clock In"}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        <button
+                          onClick={() => handleRowClock("out", record.employee_id)}
+                          disabled={!todayStatuses[record.employee_id]?.check_in || !!todayStatuses[record.employee_id]?.check_out || adminClocking}
+                          className="flex items-center justify-center gap-2 px-3 py-1.5 border border-red-200 text-red-700 rounded-lg bg-white hover:border-red-300 hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
+                        >
+                          {todayStatuses[record.employee_id]?.check_out
+                            ? `Out ${formatTime(todayStatuses[record.employee_id].check_out)}`
+                            : adminClocking && rowClockingId === record.employee_id
+                            ? "Processing..."
+                            : "Clock Out"}
+                        </button>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {record.total_hours ? `${record.total_hours.toFixed(2)} hrs` : "-"}

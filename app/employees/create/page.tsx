@@ -1,13 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
+import { benefitsService } from "@/services/benefits";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, User, Lock, Gift, Minus } from "lucide-react";
+import { ArrowLeft, User, Lock, Gift, CalendarClock } from "lucide-react";
+import { leaveTypesService } from "@/services/leaveTypes";
+import { leaveAllocationsService } from "@/services/leaveAllocations";
+import type { LeaveType } from "@/types/hr";
+  // Removed leaveRequestsService import
 
-type TabType = "personal" | "account" | "benefits" | "deductions";
+type TabType = "personal" | "account" | "compensation" | "attendance";
+
+type BenefitDraft = {
+  name: string;
+  amount: number;
+  type: "fixed" | "percentage";
+};
+
+type BenefitOption = BenefitDraft & { id: number };
 
 type DepartmentOption = {
   id: number;
@@ -49,8 +63,8 @@ interface FormData {
 const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "personal", label: "Personal Info", icon: User },
   { id: "account", label: "User Account", icon: Lock },
-  { id: "benefits", label: "Benefits", icon: Gift },
-  { id: "deductions", label: "Deductions", icon: Minus },
+  { id: "compensation", label: "Benefits & Deductions", icon: Gift },
+  { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
 ];
 
 export default function CreateEmployeePage() {
@@ -62,6 +76,16 @@ export default function CreateEmployeePage() {
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = useState(false);
   const [departmentError, setDepartmentError] = useState("");
+  const [availableBenefits, setAvailableBenefits] = useState<BenefitOption[]>([]);
+  const [availableDeductions, setAvailableDeductions] = useState<BenefitOption[]>([]);
+  const [selectedBenefits, setSelectedBenefits] = useState<number[]>([]);
+  const [selectedDeductions, setSelectedDeductions] = useState<number[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
+  const [leaveTypesError, setLeaveTypesError] = useState("");
+  const [leaveForm, setLeaveForm] = useState({
+    leave_type_id: "",
+  });
   const [formData, setFormData] = useState<FormData>({
     employee_code: "",
     first_name: "",
@@ -119,7 +143,66 @@ export default function CreateEmployeePage() {
       }
     };
 
+    const loadBenefitCatalog = async () => {
+      try {
+        const [bRes, dRes] = await Promise.all([
+          benefitsService.listBenefits(),
+          benefitsService.listDeductions(),
+        ]);
+
+        const benefitsList = (bRes as any)?.data?.data ?? (bRes as any)?.data ?? [];
+        const deductionsList = (dRes as any)?.data?.data ?? (dRes as any)?.data ?? [];
+
+        const normalizedBenefits: BenefitOption[] = Array.isArray(benefitsList)
+          ? benefitsList
+              .filter((b: any) => b && (b.benefit_name || b.name))
+              .map((b: any) => ({
+                id: Number(b.id),
+                name: b.benefit_name ?? b.name,
+                amount: Number(b.amount ?? 0),
+                type: b.type === "percentage" ? "percentage" : "fixed",
+              }))
+          : [];
+
+        const normalizedDeductions: BenefitOption[] = Array.isArray(deductionsList)
+          ? deductionsList
+              .filter((d: any) => d && (d.deduction_name || d.name))
+              .map((d: any) => ({
+                id: Number(d.id),
+                name: d.deduction_name ?? d.name,
+                amount: Number(d.amount ?? 0),
+                type: d.type === "percentage" ? "percentage" : "fixed",
+              }))
+          : [];
+
+        setAvailableBenefits(normalizedBenefits);
+        setAvailableDeductions(normalizedDeductions);
+      } catch (err) {
+        console.error("Failed to load benefits/deductions", err);
+        setAvailableBenefits([]);
+        setAvailableDeductions([]);
+      }
+    };
+
+    const loadLeaveTypes = async () => {
+      try {
+        setLeaveTypesLoading(true);
+        setLeaveTypesError("");
+        const res = await leaveTypesService.list();
+        const items = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+        setLeaveTypes(Array.isArray(items) ? items : []);
+      } catch (err) {
+        console.error("Failed to load leave types", err);
+        setLeaveTypesError("Unable to load leave types");
+        setLeaveTypes([]);
+      } finally {
+        setLeaveTypesLoading(false);
+      }
+    };
+
     loadDepartments();
+    loadBenefitCatalog();
+    loadLeaveTypes();
   }, [router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -137,8 +220,28 @@ export default function CreateEmployeePage() {
     }));
   };
 
+  const toggleSelection = (kind: "benefit" | "deduction", id: number) => {
+    if (kind === "benefit") {
+      setSelectedBenefits((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
+    } else {
+      setSelectedDeductions((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+    }
+  };
+
   const activeDepartments = departments.filter((d) => (d.status ?? "active") === "active");
   const isValidDepartmentName = (name: string) => activeDepartments.some((d) => d.name === name);
+
+  const handleLeaveInput = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setLeaveForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const getDefaultDaysForLeaveType = (leaveTypeId?: string | number) => {
+    const ltId = Number(leaveTypeId);
+    const selected = leaveTypes.find((lt) => Number(lt.id) === ltId);
+    const candidate = selected?.default_days ?? selected?.days_per_year ?? 0;
+    return Number.isFinite(Number(candidate)) ? Number(candidate) : 0;
+  };
 
   const validateForm = () => {
     setDepartmentError("");
@@ -239,14 +342,80 @@ export default function CreateEmployeePage() {
         },
       };
 
-      await api.post("/api/v1/employees", payload);
-      setSuccess("Employee created successfully!");
-      setTimeout(() => {
-        router.push("/employees");
-      }, 2000);
+      const res = await api.post("/api/v1/employees", payload);
+      const employeeId = res.data?.data?.id ?? res.data?.id;
+
+      if (employeeId) {
+        const selectedBenefitItems = availableBenefits.filter((b) => selectedBenefits.includes(b.id));
+        const selectedDeductionItems = availableDeductions.filter((d) => selectedDeductions.includes(d.id));
+
+        if (selectedBenefitItems.length) {
+          await Promise.all(
+            selectedBenefitItems.map((b) =>
+              benefitsService.createBenefit({
+                benefit_id: Number(b.id),
+                employee_id: Number(employeeId),
+                benefit_name: b.name || "Benefit",
+                name: b.name || "Benefit",
+                amount: Number(b.amount ?? 0),
+                type: b.type === "percentage" ? "percentage" : "fixed",
+              })
+            )
+          );
+        }
+
+        if (selectedDeductionItems.length) {
+          await Promise.all(
+            selectedDeductionItems.map((d) =>
+              benefitsService.createDeduction({
+                deduction_id: Number(d.id),
+                employee_id: Number(employeeId),
+                deduction_name: d.name || "Deduction",
+                name: d.name || "Deduction",
+                amount: Number(d.amount ?? 0),
+                type: d.type === "percentage" ? "percentage" : "fixed",
+              })
+            )
+          );
+        }
+
+        if (leaveForm.leave_type_id) {
+          try {
+            const defaultDays = getDefaultDaysForLeaveType(leaveForm.leave_type_id);
+            await leaveAllocationsService.create({
+              employee_id: Number(employeeId),
+              leave_type_id: Number(leaveForm.leave_type_id),
+              year: formData.start_date ? Number(new Date(formData.start_date).getFullYear()) : new Date().getFullYear(),
+              // use the leave type's configured default/days-per-year as the allocation
+              days_allocated: defaultDays,
+              days_used: 0,
+              // send optional dates if backend accepts; using start_date as baseline
+              start_date: formData.start_date || undefined,
+              end_date: formData.start_date || undefined,
+              note: "Default leave type allocation",
+            });
+          } catch (allocErr) {
+            console.warn("Leave allocation create failed", allocErr);
+          }
+        }
+
+      }
+
+      setSuccess("Employee created successfully! Redirecting to details...");
+      if (employeeId) {
+        // Go straight to the new employee's detail page to avoid extra navigation hops
+        setTimeout(() => {
+          router.push(`/employees/${employeeId}`);
+        }, 400);
+      } else {
+        setTimeout(() => {
+          router.push("/employees");
+        }, 400);
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to create employee");
-      console.error(err);
+      const apiMessage = err?.response?.data?.message || err?.response?.data?.error;
+      setError(apiMessage || "Failed to create employee");
+      console.error("Create employee error", err?.response?.data || err);
     } finally {
       setLoading(false);
     }
@@ -255,12 +424,9 @@ export default function CreateEmployeePage() {
   return (
     <HRMSSidebar>
       <div className="space-y-6">
-        <button
-          onClick={() => router.push("/employees")}
-          className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
-        >
+        <Link href="/employees" className="flex items-center gap-2 text-gray-700 hover:text-gray-900">
           <ArrowLeft className="w-4 h-4" /> Back to Employees
-        </button>
+        </Link>
 
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Create New Employee</h1>
@@ -542,68 +708,106 @@ export default function CreateEmployeePage() {
               </div>
             )}
 
-            {/* Benefits Tab */}
-            {activeTab === "benefits" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Benefits</h2>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={formData.health_insurance}
-                      onChange={(e) => handleCheckboxChange("health_insurance", e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">Health Insurance</p>
-                      <p className="text-sm text-gray-500">Comprehensive health coverage for the employee</p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={formData.retirement_plan}
-                      onChange={(e) => handleCheckboxChange("retirement_plan", e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">Retirement Plan</p>
-                      <p className="text-sm text-gray-500">401(k) or pension plan enrollment</p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={formData.dental_coverage}
-                      onChange={(e) => handleCheckboxChange("dental_coverage", e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">Dental Coverage</p>
-                      <p className="text-sm text-gray-500">Dental care and treatment coverage</p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={formData.vision_coverage}
-                      onChange={(e) => handleCheckboxChange("vision_coverage", e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900">Vision Coverage</p>
-                      <p className="text-sm text-gray-500">Eye care and glasses coverage</p>
-                    </div>
-                  </label>
+            {/* Compensation Tab */}
+            {activeTab === "compensation" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Benefits & Deductions</h2>
+                    <p className="text-sm text-gray-500">Attach catalog items and set payroll deductions together.</p>
+                  </div>
+                  <span className="text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Compensation</span>
                 </div>
-              </div>
-            )}
 
-            {/* Deductions Tab */}
-            {activeTab === "deductions" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">Deductions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Select benefits from catalog</h3>
+                      <span className="text-xs text-gray-500">Settings → Benefits</span>
+                    </div>
+                    {availableBenefits.length === 0 ? (
+                      <p className="text-sm text-gray-500">No benefits available. Add some in Settings.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableBenefits.map((b) => (
+                          <label
+                            key={b.id}
+                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedBenefits.includes(b.id)}
+                                onChange={() => toggleSelection("benefit", b.id)}
+                                className="w-4 h-4 text-blue-600 rounded"
+                              />
+                              <div>
+                                <p className="font-medium text-gray-900">{b.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full border ${
+                                b.type === "percentage"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-green-50 text-green-700 border-green-200"
+                              }`}
+                            >
+                              {b.type === "percentage" ? "Percent" : "Fixed"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Select deductions from catalog</h3>
+                      <span className="text-xs text-gray-500">Settings → Benefits</span>
+                    </div>
+                    {availableDeductions.length === 0 ? (
+                      <p className="text-sm text-gray-500">No deductions available. Add some in Settings.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableDeductions.map((d) => (
+                          <label
+                            key={d.id}
+                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedDeductions.includes(d.id)}
+                                onChange={() => toggleSelection("deduction", d.id)}
+                                className="w-4 h-4 text-blue-600 rounded"
+                              />
+                              <div>
+                                <p className="font-medium text-gray-900">{d.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full border ${
+                                d.type === "percentage"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-green-50 text-green-700 border-green-200"
+                              }`}
+                            >
+                              {d.type === "percentage" ? "Percent" : "Fixed"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Tax Percentage (%)</label>
                     <input
@@ -630,7 +834,7 @@ export default function CreateEmployeePage() {
                       className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Health Insurance Deduction ($)</label>
                     <input
                       type="number"
@@ -646,15 +850,49 @@ export default function CreateEmployeePage() {
               </div>
             )}
 
+            {/* Attendance & Leave Tab */}
+            {activeTab === "attendance" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Attendance & Leave</h2>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                  Optional: pick a default leave type to associate now. You can update or add detailed leave later.
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Leave type (optional)</label>
+                    <select
+                      name="leave_type_id"
+                      value={leaveForm.leave_type_id}
+                      onChange={handleLeaveInput}
+                      className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">No leave type</option>
+                      {leaveTypes.map((lt) => (
+                        <option key={lt.id} value={lt.id}>
+                          {lt.name} {lt.is_paid ? "(paid)" : "(unpaid)"} • {lt.default_days ?? lt.days_per_year ?? "-"} days/year
+                        </option>
+                      ))}
+                    </select>
+                    {leaveTypesError ? <p className="mt-1 text-sm text-red-600">{leaveTypesError}</p> : null}
+                    {leaveTypesLoading ? <p className="mt-1 text-sm text-gray-500">Loading leave types...</p> : null}
+                    {leaveForm.leave_type_id ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Will allocate {getDefaultDaysForLeaveType(leaveForm.leave_type_id)} days by default.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Submit Buttons */}
             <div className="flex gap-3 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={() => router.push("/employees")}
-                className="flex-1 px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              <Link
+                href="/employees"
+                className="flex-1 px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-center"
               >
                 Cancel
-              </button>
+              </Link>
               <button
                 type="submit"
                 disabled={loading}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
 import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -20,40 +20,43 @@ interface Employee {
 }
 
 export default function EmployeesPage() {
-  const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [perPage, setPerPage] = useState(10);
 
   useEffect(() => {
     const token = getToken();
     if (!token) {
-      router.push("/auth/login");
+      window.location.href = "/auth/login";
       return;
     }
     fetchEmployees();
-  }, [page, search, router]);
+    // We intentionally fetch once; search/pagination happen client-side to avoid extra API calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: "10",
-        ...(search ? { search } : {}),
-      });
+      const params = new URLSearchParams({ per_page: "500" });
       const res = await api.get(`/api/v1/employees?${params.toString()}`);
       const data = res.data.data || res.data;
       
+      const normalizeAndSort = (list: Employee[]) =>
+        [...list].sort((a, b) => {
+          const nameA = `${a.first_name || ""} ${a.last_name || ""}`.trim().toLowerCase();
+          const nameB = `${b.first_name || ""} ${b.last_name || ""}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+
       if (Array.isArray(data)) {
-        setEmployees(data);
-        setTotalPages(1);
+        setEmployees(normalizeAndSort(data));
       } else {
-        setEmployees(data.data || []);
-        setTotalPages(data.last_page || 1);
+        const rows = Array.isArray(data.data) ? data.data : [];
+        setEmployees(normalizeAndSort(rows));
       }
       setError("");
     } catch (err) {
@@ -78,12 +81,29 @@ export default function EmployeesPage() {
     if (!confirm("Are you sure you want to delete this employee?")) return;
     try {
       await api.delete(`/api/v1/employees/${id}`);
-      fetchEmployees();
+      setEmployees((prev) => prev.filter((emp) => emp.id !== id));
     } catch (err) {
       setError("Failed to delete employee");
       console.error(err);
     }
   };
+
+  const filteredEmployees = employees.filter((emp) => {
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      emp.employee_code?.toLowerCase().includes(term) ||
+      `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(term) ||
+      emp.email?.toLowerCase().includes(term)
+    );
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / perPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * perPage,
+    currentPage * perPage
+  );
 
   return (
     <HRMSSidebar>
@@ -94,20 +114,14 @@ export default function EmployeesPage() {
             <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
             <p className="text-gray-500 mt-1">Manage your team members and their information</p>
           </div>
-          <button
-            onClick={() => router.push("/employees/create")}
+          <Link
+            href="/employees/create"
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             <Plus className="w-5 h-5" />
             Add Employee
-          </button>
+          </Link>
         </div>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-            {error}
-          </div>
-        )}
 
         {/* Search Bar */}
         <div className="flex items-center gap-4">
@@ -123,6 +137,23 @@ export default function EmployeesPage() {
               }}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>Rows:</span>
+            <select
+              value={perPage}
+              onChange={(e) => {
+                setPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -151,13 +182,13 @@ export default function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {employees.map((emp) => (
+                  {paginatedEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 text-sm text-gray-700 font-medium">{emp.employee_code}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        <a href={`/employees/${emp.id}`} className="text-blue-600 hover:underline">
+                        <Link href={`/employees/${emp.id}`} className="text-blue-600 hover:underline">
                           {emp.first_name} {emp.last_name}
-                        </a>
+                        </Link>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{emp.email}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{emp.department || "-"}</td>
@@ -174,12 +205,12 @@ export default function EmployeesPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm flex gap-2">
-                        <a
+                        <Link
                           href={`/employees/${emp.id}/edit`}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Edit2 className="w-4 h-4" />
-                        </a>
+                        </Link>
                         <button
                           onClick={() => handleDeleteEmployee(emp.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -197,19 +228,19 @@ export default function EmployeesPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6">
                 <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
                   className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Previous
                 </button>
                 <span className="text-sm text-gray-600">
-                  Page {page} of {totalPages}
+                  Page {currentPage} of {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page === totalPages}
+                  onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
                   className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
