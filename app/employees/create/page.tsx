@@ -7,13 +7,14 @@ import api from "@/services/api";
 import { benefitsService } from "@/services/benefits";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, User, Lock, Gift, CalendarClock } from "lucide-react";
+import { ArrowLeft, User, Lock, Gift, CalendarClock, Clock } from "lucide-react";
 import { leaveTypesService } from "@/services/leaveTypes";
 import { leaveAllocationsService } from "@/services/leaveAllocations";
 import type { LeaveType } from "@/types/hr";
+import { workSchedulesService } from "@/services/workSchedules";
   // Removed leaveRequestsService import
 
-type TabType = "personal" | "account" | "compensation" | "attendance";
+type TabType = "personal" | "account" | "compensation" | "attendance" | "work-schedule";
 
 type BenefitDraft = {
   name: string;
@@ -65,6 +66,7 @@ const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "account", label: "User Account", icon: Lock },
   { id: "compensation", label: "Benefits & Deductions", icon: Gift },
   { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
+  { id: "work-schedule", label: "Work Schedule", icon: Clock },
 ];
 
 export default function CreateEmployeePage() {
@@ -83,6 +85,11 @@ export default function CreateEmployeePage() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
   const [leaveTypesError, setLeaveTypesError] = useState("");
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [schedulesError, setSchedulesError] = useState("");
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
+  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [leaveForm, setLeaveForm] = useState({
     leave_type_id: "",
   });
@@ -200,9 +207,26 @@ export default function CreateEmployeePage() {
       }
     };
 
+    const loadSchedules = async () => {
+      try {
+        setSchedulesLoading(true);
+        setSchedulesError("");
+        const res = await workSchedulesService.list();
+        const data = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+        setSchedules(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load work schedules", err);
+        setSchedulesError("Unable to load work schedules");
+        setSchedules([]);
+      } finally {
+        setSchedulesLoading(false);
+      }
+    };
+
     loadDepartments();
     loadBenefitCatalog();
     loadLeaveTypes();
+    loadSchedules();
   }, [router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -291,6 +315,11 @@ export default function CreateEmployeePage() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      return false;
+    }
+
+    if (selectedScheduleId && !scheduleEffectiveFrom) {
+      setError("Please choose an effective date for the work schedule");
       return false;
     }
 
@@ -396,6 +425,23 @@ export default function CreateEmployeePage() {
             });
           } catch (allocErr) {
             console.warn("Leave allocation create failed", allocErr);
+          }
+        }
+
+        if (selectedScheduleId) {
+          try {
+            await workSchedulesService.assignToEmployee(
+              Number(employeeId),
+              Number(selectedScheduleId),
+              scheduleEffectiveFrom
+            );
+          } catch (schedErr: any) {
+            console.warn("Work schedule assignment failed", schedErr);
+            setError(
+              schedErr?.response?.data?.message
+                ? `Employee created, but schedule not assigned: ${schedErr.response.data.message}`
+                : "Employee created, but assigning work schedule failed"
+            );
           }
         }
 
@@ -881,6 +927,54 @@ export default function CreateEmployeePage() {
                       </p>
                     ) : null}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Work Schedule Tab */}
+            {activeTab === "work-schedule" && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Work Schedule</h2>
+                    <p className="text-sm text-gray-500">Optional: select a schedule now and set its effective date.</p>
+                  </div>
+                  <Link href="/settings/work-schedules" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Manage Schedules
+                  </Link>
+                </div>
+
+                <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div className="min-w-56 flex-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Select Schedule</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={selectedScheduleId}
+                        onChange={(e) => setSelectedScheduleId(e.target.value)}
+                        disabled={schedulesLoading}
+                      >
+                        <option value="">No schedule</option>
+                        {schedules.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} • {s.hours_per_day}h/day
+                          </option>
+                        ))}
+                      </select>
+                      {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
+                    </div>
+                    <div className="min-w-40">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={scheduleEffectiveFrom}
+                        onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                        disabled={!selectedScheduleId}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">If you choose a schedule, an effective date is required and will be sent as <code>effective_from</code>.</p>
                 </div>
               </div>
             )}

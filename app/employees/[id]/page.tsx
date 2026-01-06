@@ -9,7 +9,8 @@ import { leaveAllocationsService } from "@/services/leaveAllocations";
 import { leaveTypesService } from "@/services/leaveTypes";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock } from "lucide-react";
+import { workSchedulesService } from "@/services/workSchedules";
 import type { LeaveType } from "@/types/hr";
 
 interface CatalogItem {
@@ -43,15 +44,18 @@ interface EmployeeDetail {
   employee_deductions?: CatalogItem[];
   leave_type_id?: number;
   leave_type?: { id: number; name: string; is_paid?: boolean };
+  work_schedule_id?: number;
+  work_schedule?: { id: number; name: string; working_days?: string[]; hours_per_day?: number; notes?: string | null; effective_from?: string | null };
 }
 
-type TabType = "personal" | "account" | "benefits" | "attendance";
+type TabType = "personal" | "account" | "benefits" | "attendance" | "work-schedule";
 
 const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "personal", label: "Personal Info", icon: User },
   { id: "account", label: "User Account", icon: Lock },
   { id: "benefits", label: "Benefits & Deductions", icon: Gift },
   { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
+  { id: "work-schedule", label: "Work Schedule", icon: Clock },
 ];
 
 export default function EmployeeDetailPage() {
@@ -88,6 +92,22 @@ export default function EmployeeDetailPage() {
   }>>({});
   const [savingAllocationId, setSavingAllocationId] = useState<number | null>(null);
   const [editingAllocationId, setEditingAllocationId] = useState<number | null>(null);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [schedulesError, setSchedulesError] = useState("");
+  const [assigningSchedule, setAssigningSchedule] = useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
+  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [scheduleAssignError, setScheduleAssignError] = useState("");
+  const [scheduleAssignSuccess, setScheduleAssignSuccess] = useState("");
+  const [scheduleHistory, setScheduleHistory] = useState<any[]>([]);
+  const [scheduleHistoryError, setScheduleHistoryError] = useState("");
+  const [benefitsLoading, setBenefitsLoading] = useState(false);
+  const [benefitsLoaded, setBenefitsLoaded] = useState(false);
+  const [allocationsLoading, setAllocationsLoading] = useState(false);
+  const [allocationsLoaded, setAllocationsLoaded] = useState(false);
+  const [schedulesLoaded, setSchedulesLoaded] = useState(false);
+  const [scheduleHistoryLoaded, setScheduleHistoryLoaded] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -95,9 +115,42 @@ export default function EmployeeDetailPage() {
       router.push("/auth/login");
       return;
     }
-    if (id) fetchEmployee(id);
-    loadLeaveTypes();
-  }, [id, router]);
+    if (id) {
+      setBenefitsLoaded(false);
+      setBenefitsLoading(false);
+      setAllocationsLoaded(false);
+      setAllocationsLoading(false);
+      setSchedulesLoaded(false);
+      setScheduleHistoryLoaded(false);
+      setScheduleHistory([]);
+      setAllocations([]);
+      setAvailableBenefits([]);
+      setAvailableDeductions([]);
+      setAssignError("");
+      setAllocationError("");
+      setScheduleAssignError("");
+      setScheduleAssignSuccess("");
+      fetchEmployee(id);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (activeTab === "benefits" && !benefitsLoaded && !benefitsLoading) {
+      loadBenefitsAndDeductions(Number(id));
+    }
+    if (activeTab === "attendance" && !allocationsLoaded && !allocationsLoading) {
+      loadAttendanceData(Number(id));
+    }
+    if (activeTab === "work-schedule") {
+      if (!schedulesLoaded && !schedulesLoading) {
+        loadSchedules();
+      }
+      if (!scheduleHistoryLoaded) {
+        loadEmployeeSchedules(id);
+      }
+    }
+  }, [activeTab, id, benefitsLoaded, benefitsLoading, allocationsLoaded, allocationsLoading, schedulesLoaded, schedulesLoading, scheduleHistoryLoaded]);
 
   const loadLeaveTypes = async () => {
     try {
@@ -115,26 +168,16 @@ export default function EmployeeDetailPage() {
     }
   };
 
-  const fetchEmployee = async (empId: string | number) => {
+  const loadBenefitsAndDeductions = async (empId: number) => {
     try {
-      setLoading(true);
-      const [empRes, benRes, dedRes, benCatalogRes, dedCatalogRes] = await Promise.all([
-        api.get(`/api/v1/employees/${empId}`),
+      setBenefitsLoading(true);
+      setAssignError("");
+      const [benRes, dedRes, benCatalogRes, dedCatalogRes] = await Promise.all([
         benefitsService.listBenefits(empId),
         benefitsService.listDeductions(empId),
         benefitsService.listBenefits(),
         benefitsService.listDeductions(),
       ]);
-
-      // Leave allocations are best-effort; backend currently errors on employee_id column
-      let allocRes: any = null;
-      try {
-        allocRes = await leaveAllocationsService.listByEmployee(Number(empId));
-      } catch (allocErr) {
-        console.warn('Leave allocations lookup failed', allocErr);
-      }
-
-      const empData = empRes.data.data || empRes.data;
 
       const benefitsListRaw = (benRes as any)?.data?.data ?? (benRes as any)?.data ?? [];
       const deductionsListRaw = (dedRes as any)?.data?.data ?? (dedRes as any)?.data ?? [];
@@ -176,12 +219,89 @@ export default function EmployeeDetailPage() {
       setAvailableBenefits(normalizeCatalog(benefitsCatalogRaw, "benefit"));
       setAvailableDeductions(normalizeCatalog(deductionsCatalogRaw, "deduction"));
 
-      setEmployee({
-        ...empData,
-        employee_benefits: normalizedBenefits.length ? normalizedBenefits : empData.employee_benefits,
-        employee_deductions: normalizedDeductions.length ? normalizedDeductions : empData.employee_deductions,
-      });
-      const allocList = allocRes ? (allocRes as any)?.data?.data ?? (allocRes as any)?.data ?? [] : [];
+      setEmployee((prev) =>
+        prev
+          ? {
+              ...prev,
+              employee_benefits: normalizedBenefits.length ? normalizedBenefits : prev.employee_benefits,
+              employee_deductions: normalizedDeductions.length ? normalizedDeductions : prev.employee_deductions,
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error(err);
+      setAssignError("Failed to load benefits or deductions");
+    } finally {
+      setBenefitsLoading(false);
+      setBenefitsLoaded(true);
+    }
+  };
+
+  const loadSchedules = async () => {
+    try {
+      setSchedulesLoading(true);
+      setSchedulesError("");
+      const res = await workSchedulesService.list();
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setSchedules(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setSchedulesError("Failed to load work schedules");
+      setSchedules([]);
+    } finally {
+      setSchedulesLoading(false);
+      setSchedulesLoaded(true);
+    }
+  };
+
+  const selectLatestSchedule = (items: any[]) => {
+    if (!Array.isArray(items) || !items.length) return null;
+    const sorted = [...items].sort((a, b) => {
+      const aDate = new Date(a.effective_from || a.work_schedule?.effective_from || a.created_at || 0).getTime();
+      const bDate = new Date(b.effective_from || b.work_schedule?.effective_from || b.created_at || 0).getTime();
+      return bDate - aDate;
+    });
+    return sorted[0];
+  };
+
+  const loadEmployeeSchedules = async (empId: string | number) => {
+    try {
+      setScheduleHistoryError("");
+      const res = await workSchedulesService.listByEmployee(empId);
+      const list = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      const normalized = Array.isArray(list) ? list : [];
+      setScheduleHistory(normalized);
+      const latest = selectLatestSchedule(normalized);
+      if (latest && latest.effective_from) {
+        setScheduleEffectiveFrom(String(latest.effective_from).slice(0, 10));
+      }
+      if (latest && !employee?.work_schedule) {
+        const resolved = latest.work_schedule || latest;
+        setEmployee((prev) =>
+          prev
+            ? {
+                ...prev,
+                work_schedule_id: latest.work_schedule_id || resolved.id || prev.work_schedule_id,
+                work_schedule: resolved,
+              }
+            : prev
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setScheduleHistoryError("Failed to load schedule history");
+      setScheduleHistory([]);
+    } finally {
+      setScheduleHistoryLoaded(true);
+    }
+  };
+
+  const loadAllocations = async (empId: number) => {
+    try {
+      setAllocationsLoading(true);
+      setAllocationError("");
+      const allocRes = await leaveAllocationsService.listByEmployee(Number(empId));
+      const allocList = (allocRes as any)?.data?.data ?? (allocRes as any)?.data ?? [];
       setAllocations(Array.isArray(allocList) ? allocList : []);
       const edits: Record<number, { leave_type_id: number; year: number; days_allocated: number; days_used?: number; note?: string }> = {};
       (Array.isArray(allocList) ? allocList : []).forEach((alloc: any) => {
@@ -196,6 +316,32 @@ export default function EmployeeDetailPage() {
         }
       });
       setAllocationEdits(edits);
+    } catch (err) {
+      console.error(err);
+      setAllocationError("Failed to load leave allocations");
+      setAllocations([]);
+    } finally {
+      setAllocationsLoading(false);
+      setAllocationsLoaded(true);
+    }
+  };
+
+  const loadAttendanceData = async (empId: number) => {
+    await Promise.all([loadLeaveTypes(), loadAllocations(empId)]);
+  };
+
+  const fetchEmployee = async (empId: string | number) => {
+    try {
+      setLoading(true);
+      const empRes = await api.get(`/api/v1/employees/${empId}`);
+      const empData = empRes.data.data || empRes.data;
+      setEmployee(empData);
+      if (empData?.work_schedule_id) {
+        setSelectedScheduleId(String(empData.work_schedule_id));
+      }
+      if (empData?.work_schedule?.effective_from) {
+        setScheduleEffectiveFrom(String(empData.work_schedule.effective_from).slice(0, 10));
+      }
       setError("");
     } catch (err) {
       console.error(err);
@@ -277,6 +423,56 @@ export default function EmployeeDetailPage() {
     }
   };
 
+  const handleAssignSchedule = async () => {
+    if (!employee?.id || !selectedScheduleId) return;
+    if (!scheduleEffectiveFrom) {
+      setScheduleAssignError("Please choose an effective date");
+      return;
+    }
+    try {
+      setAssigningSchedule(true);
+      setScheduleAssignError("");
+      setScheduleAssignSuccess("");
+      const res = await workSchedulesService.assignToEmployee(
+        Number(employee.id),
+        Number(selectedScheduleId),
+        scheduleEffectiveFrom
+      );
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? null;
+      const selected = schedules.find((s) => String(s.id) === String(selectedScheduleId));
+      const resolvedSchedule = {
+        ...(data?.work_schedule || data || selected || {
+          id: Number(selectedScheduleId),
+          name: selected?.name || "Work Schedule",
+          working_days: selected?.working_days,
+          hours_per_day: selected?.hours_per_day,
+          notes: selected?.notes,
+        }),
+        effective_from: data?.effective_from ?? data?.work_schedule?.effective_from ?? scheduleEffectiveFrom,
+      };
+      setEmployee((prev) =>
+        prev
+          ? { ...prev, work_schedule_id: Number(selectedScheduleId), work_schedule: resolvedSchedule }
+          : prev
+      );
+      setScheduleHistory((prev) => [{
+        ...(data || {}),
+        work_schedule: resolvedSchedule,
+        work_schedule_id: Number(selectedScheduleId),
+        effective_from: resolvedSchedule.effective_from,
+      }, ...(Array.isArray(prev) ? prev : [])]);
+      setSchedulesLoaded(true);
+      setScheduleHistoryLoaded(true);
+      setScheduleAssignSuccess("Work schedule assigned");
+      setTimeout(() => setScheduleAssignSuccess(""), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setScheduleAssignError(err?.response?.data?.message || "Failed to assign work schedule");
+    } finally {
+      setAssigningSchedule(false);
+    }
+  };
+
   const formatMoney = (value?: number) => {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
     return `$${Number(value).toLocaleString()}`;
@@ -310,7 +506,7 @@ export default function EmployeeDetailPage() {
       const res = await leaveAllocationsService.create(payload as any);
       const createdRaw = (res as any)?.data?.data ?? (res as any)?.data ?? payload;
       const selected = leaveTypes.find((lt) => Number(lt.id) === Number(selectedLeaveTypeId));
-      const leaveTypeData = createdRaw.leave_type ?? selected ?? (createdRaw.leave_type_id ? { id: Number(selectedLeaveTypeId), name: selected?.name } : undefined);
+      const leaveTypeData = createdRaw.leave_type ?? selected ?? (createdRaw.leave_type_id ? { id: Number(selectedLeaveTypeId), name: (selected as any)?.name } : undefined);
       const created = {
         ...createdRaw,
         leave_type: leaveTypeData,
@@ -393,7 +589,7 @@ export default function EmployeeDetailPage() {
       } as any);
       const updatedRaw = (res as any)?.data?.data ?? (res as any)?.data ?? edit;
       const selected = leaveTypes.find((lt) => Number(lt.id) === Number(edit.leave_type_id));
-      const leaveTypeData = updatedRaw.leave_type ?? selected ?? (updatedRaw.leave_type_id ? { id: edit.leave_type_id, name: selected?.name } : undefined);
+      const leaveTypeData = updatedRaw.leave_type ?? selected ?? (updatedRaw.leave_type_id ? { id: edit.leave_type_id, name: (selected as any)?.name } : undefined);
       const updated = { ...updatedRaw, leave_type: leaveTypeData };
       setAllocations((prev) => prev.map((alloc) => (Number(alloc.id) === Number(id) ? { ...alloc, ...updated } : alloc)));
       setEditingAllocationId(null);
@@ -822,6 +1018,115 @@ export default function EmployeeDetailPage() {
                     ) : (
                       <p className="text-sm text-gray-600">No leave allocations found. Use edit to assign a leave type.</p>
                     )}
+                  </div>
+                )}
+
+                {activeTab === "work-schedule" && (
+                  <div className="space-y-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Work Schedule Assignment</h3>
+                      <Link href="/settings/work-schedules" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                        Manage Schedules
+                      </Link>
+                    </div>
+
+                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                      <div className="flex flex-wrap gap-3 items-end">
+                        <div className="min-w-56 flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Select Schedule</label>
+                          <select
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={selectedScheduleId}
+                            onChange={(e) => setSelectedScheduleId(e.target.value)}
+                            disabled={schedulesLoading}
+                          >
+                            <option value="">Choose schedule</option>
+                            {schedules.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} • {s.hours_per_day}h/day
+                              </option>
+                            ))}
+                          </select>
+                          {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
+                        </div>
+                        <div className="min-w-40">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
+                          <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={scheduleEffectiveFrom}
+                            onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAssignSchedule}
+                          disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {assigningSchedule ? "Assigning..." : "Assign"}
+                        </button>
+                      </div>
+                      {scheduleAssignError && <p className="text-sm text-red-600">{scheduleAssignError}</p>}
+                      {scheduleAssignSuccess && <p className="text-sm text-green-600">{scheduleAssignSuccess}</p>}
+                    </div>
+
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                      <p className="text-xs font-semibold text-gray-600 uppercase">Current Schedule</p>
+                      {employee.work_schedule ? (
+                        <div className="space-y-1 text-sm text-gray-800">
+                          <p className="font-medium text-gray-900">{employee.work_schedule.name}</p>
+                          <p>{employee.work_schedule.hours_per_day ?? "-"} hours per day</p>
+                          {employee.work_schedule.effective_from ? (
+                            <p>Effective from: {employee.work_schedule.effective_from}</p>
+                          ) : null}
+                          <div className="flex flex-wrap gap-2">
+                            {(employee.work_schedule.working_days || []).map((d: string) => (
+                              <span key={d} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                {d.toUpperCase()}
+                              </span>
+                            ))}
+                          </div>
+                          {employee.work_schedule.notes ? (
+                            <p className="text-sm text-gray-600">{employee.work_schedule.notes}</p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No schedule assigned yet.</p>
+                      )}
+                      <div className="pt-3 space-y-2">
+                        <p className="text-xs font-semibold text-gray-600 uppercase">Assignments (latest first)</p>
+                        {scheduleHistoryError ? (
+                          <p className="text-xs text-red-600">{scheduleHistoryError}</p>
+                        ) : null}
+                        {Array.isArray(scheduleHistory) && scheduleHistory.length ? (
+                          <div className="space-y-2">
+                            {scheduleHistory.map((item, idx) => {
+                              const sched = item.work_schedule || item;
+                              return (
+                                <div key={`${item.id ?? idx}-${item.work_schedule_id ?? sched?.id ?? "sched"}`} className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800">
+                                  <div className="flex items-center justify-between">
+                                    <p className="font-medium text-gray-900">{sched?.name ?? "Work Schedule"}</p>
+                                    <span className="text-xs text-gray-500">{item.effective_from || sched?.effective_from || ""}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-600">{sched?.hours_per_day ?? "-"} hours/day</p>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {(sched?.working_days || []).map((d: string) => (
+                                      <span key={d} className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                        {d.toUpperCase()}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {sched?.notes ? <p className="text-xs text-gray-600 mt-1">{sched.notes}</p> : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500">No history found.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

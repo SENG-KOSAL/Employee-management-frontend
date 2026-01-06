@@ -338,327 +338,346 @@ export default function AttendancePage() {
 
   return (
     <HRMSSidebar>
-      <div className="space-y-6">
+      <div className="space-y-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Attendance</h1>
-          <p className="text-gray-500 mt-1">Track your daily clock in and out</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Attendance</h1>
+            <p className="text-gray-500 mt-1 text-sm">Manage your daily attendance and view history.</p>
+          </div>
+          <div className="text-sm font-medium text-gray-500 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
         </div>
 
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-red-500"></div>
             {error}
           </div>
         )}
 
         {success && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+          <div className="p-4 bg-green-50 border border-green-100 rounded-xl text-green-700 text-sm font-medium flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
             {success}
           </div>
         )}
 
         {/* Clock In/Out Card */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg p-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold">Today's Status</h2>
-              <p className="text-blue-100 mt-2">
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-8 sm:p-10">
+          {/* Decorative circles */}
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl"></div>
+          
+          <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div className="text-center lg:text-left">
+              <h2 className="text-3xl font-bold tracking-tight">
+                Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}!
+              </h2>
+              <p className="text-blue-100 mt-2 text-lg">
                 {todayStatus?.check_in
-                  ? `Clocked in at ${formatTime(todayStatus.check_in)}`
-                  : "You haven't clocked in yet"}
+                  ? `You clocked in at ${formatTime(todayStatus.check_in)}`
+                  : "Ready to start your day?"}
               </p>
+              {todayStatus?.check_in && todayStatus?.check_out && (
+                <div className="mt-6 flex flex-wrap gap-6 justify-center lg:justify-start">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl px-5 py-3 border border-white/10">
+                    <p className="text-blue-100 text-xs uppercase tracking-wider font-semibold">Total Hours</p>
+                    <p className="text-2xl font-bold mt-1">{todayStatus.total_hours?.toFixed(2) || "-"} <span className="text-sm font-normal text-blue-200">hrs</span></p>
+                  </div>
+                  {todayStatus.is_late && (
+                    <div className="bg-red-500/20 backdrop-blur-sm rounded-xl px-5 py-3 border border-red-400/30">
+                      <p className="text-red-100 text-xs uppercase tracking-wider font-semibold">Status</p>
+                      <p className="text-2xl font-bold mt-1 text-red-50">Late</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex gap-3">
+
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <button
                 onClick={handleClockIn}
                 disabled={!!todayStatus?.check_in || clocking}
-                className="flex items-center gap-2 bg-white text-blue-700 px-6 py-3 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all font-semibold"
+                className="group relative flex items-center justify-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-[160px]"
               >
-                <Clock className="w-5 h-5" />
-                {todayStatus?.check_in
-                  ? `In at ${formatTime(todayStatus.check_in)}`
-                  : clocking
-                  ? "Processing..."
-                  : "Clock In"}
+                <Clock className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                <span>
+                  {todayStatus?.check_in
+                    ? `In ${formatTime(todayStatus.check_in)}`
+                    : clocking
+                    ? "..."
+                    : "Clock In"}
+                </span>
               </button>
               <button
                 onClick={handleClockOut}
                 disabled={!todayStatus?.check_in || !!todayStatus?.check_out || clocking}
-                className="flex items-center gap-2 bg-white text-red-700 px-6 py-3 rounded-xl shadow-sm hover:shadow-md hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all font-semibold"
+                className="group relative flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-xl shadow-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-[160px]"
               >
-                <LogOutIcon className="w-5 h-5" />
-                {todayStatus?.check_out
-                  ? `Out at ${formatTime(todayStatus.check_out)}`
-                  : clocking
-                  ? "Processing..."
-                  : "Clock Out"}
+                <LogOutIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                <span>
+                  {todayStatus?.check_out
+                    ? `Out ${formatTime(todayStatus.check_out)}`
+                    : clocking
+                    ? "..."
+                    : "Clock Out"}
+                </span>
               </button>
             </div>
           </div>
+        </div>
 
-          {todayStatus?.check_in && todayStatus?.check_out && (
-            <div className="mt-4 pt-4 border-t border-blue-400 flex gap-8">
-              <div>
-                <p className="text-blue-100 text-sm">Total Hours</p>
-                <p className="text-xl font-bold mt-1">
-                  {todayStatus.total_hours?.toFixed(2) || "-"} hrs
-                </p>
+        {/* Admin & Filters Container */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Admin Controls */}
+          {isAdminOrHr && (
+            <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Manual Entry</h3>
+                <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">Admin Only</span>
               </div>
-              {todayStatus.is_late && (
-                <div>
-                  <p className="text-blue-100 text-sm">Status</p>
-                  <p className="text-xl font-bold mt-1 text-red-300">Late</p>
+              
+              <div className="flex flex-col lg:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Select Employee</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={employeeSearch}
+                      onChange={(e) => setEmployeeSearch(e.target.value)}
+                      placeholder="Search..."
+                      className="w-full pl-4 pr-4 py-2.5 bg-gray-50 border-none rounded-t-lg text-sm focus:ring-2 focus:ring-blue-500 transition-all text-black"
+                    />
+                    <select
+                      value={actionEmployeeId}
+                      onChange={(e) => setActionEmployeeId(e.target.value)}
+                      className="w-full pl-3 pr-10 py-2.5 bg-gray-50 border-t border-gray-200 rounded-b-lg text-sm focus:ring-2 focus:ring-blue-500 transition-all appearance-none text-black"
+                    >
+                      <option value="">Select from list...</option>
+                      {filteredEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.first_name} {emp.last_name} ({emp.employee_code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 w-full lg:w-auto">
+                  <button
+                    onClick={() => handleAdminClock("in")}
+                    disabled={!actionEmployeeId || adminClocking}
+                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium shadow-sm shadow-blue-200"
+                  >
+                    <Clock className="w-4 h-4" /> Clock In
+                  </button>
+                  <button
+                    onClick={() => handleAdminClock("out")}
+                    disabled={!actionEmployeeId || adminClocking}
+                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors font-medium"
+                  >
+                    <LogOutIcon className="w-4 h-4" /> Clock Out
+                  </button>
+                </div>
+              </div>
+              
+              {selectedAdminStatus && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-wrap gap-6 text-sm">
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-1">Check In</span>
+                    <span className="font-semibold text-gray-900">{selectedAdminStatus.check_in ? formatTime(selectedAdminStatus.check_in) : "--:--"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-1">Check Out</span>
+                    <span className="font-semibold text-gray-900">{selectedAdminStatus.check_out ? formatTime(selectedAdminStatus.check_out) : "--:--"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs mb-1">Status</span>
+                    <span className={`font-medium ${selectedAdminStatus.is_late ? 'text-red-600' : 'text-green-600'}`}>
+                      {selectedAdminStatus.is_late ? "Late" : "On Time"}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
           )}
-        </div>
 
-        {/* Admin clock controls */}
-        {isAdminOrHr && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-60">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Search employee</label>
-                <input
-                  type="text"
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                  placeholder="Search by name, code, email, phone..."
-                  className="w-full px-4 py-2 mb-3 border border-gray-300  text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+          {/* Filters */}
+          <div className={`${isAdminOrHr ? 'xl:col-span-1' : 'xl:col-span-3'} bg-white rounded-2xl shadow-sm border border-gray-100 p-6`}>
+            <h3 className="text-lg font-bold text-gray-900 mb-6">Filters</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Date Range</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  />
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Employee</label>
                 <select
-                  value={actionEmployeeId}
-                  onChange={(e) => setActionEmployeeId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={employeeFilter}
+                  onChange={(e) => { setEmployeeFilter(e.target.value); setPage(1); }}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                 >
-                  <option value="">Select employee</option>
-                  {filteredEmployees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.first_name} {emp.last_name} ({emp.employee_code})
-                    </option>
+                  <option value="">All Employees</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
                   ))}
-                  {filteredEmployees.length === 0 && (
-                    <option value="" disabled>
-                      No matches
-                    </option>
-                  )}
                 </select>
               </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleAdminClock("in")}
-                  disabled={!actionEmployeeId || adminClocking}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  <Clock className="w-5 h-5" /> Clock In
-                </button>
-                <button
-                  onClick={() => handleAdminClock("out")}
-                  disabled={!actionEmployeeId || adminClocking}
-                  className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  <LogOutIcon className="w-5 h-5" /> Clock Out
-                </button>
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-700 flex gap-6 flex-wrap">
-              <div>
-                <span className="font-medium">Today:</span>{" "}
-                {selectedAdminStatus?.check_in
-                  ? `In at ${formatTime(selectedAdminStatus.check_in)}`
-                  : "Not clocked in"}
-              </div>
-              <div>
-                <span className="font-medium">Check-out:</span>{" "}
-                {selectedAdminStatus?.check_out
-                  ? formatTime(selectedAdminStatus.check_out)
-                  : "Not clocked out"}
-              </div>
-              <div>
-                <span className="font-medium">Status:</span>{" "}
-                {selectedAdminStatus
-                  ? selectedAdminStatus.is_late
-                    ? "Late"
-                    : selectedAdminStatus.attendance_status || "On time"
-                  : "-"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter Attendance</h3>
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-48">
-              <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex-1 min-w-48">
-              <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex-1 min-w-48">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
-              <select
-                value={employeeFilter}
-                onChange={(e) => {
-                  setEmployeeFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">All employees</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.first_name} {emp.last_name} ({emp.employee_code})
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </div>
 
         {/* Attendance Table */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-lg font-bold text-gray-900">Attendance History</h3>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span> On Time
+              <span className="w-2 h-2 rounded-full bg-red-500 ml-2"></span> Late
+            </div>
           </div>
-        ) : attendances.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No attendance records found</p>
-          </div>
-        ) : (
-          <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Employee</th>
+                  <th className="px-6 py-4">Check In</th>
+                  <th className="px-6 py-4">Check Out</th>
+                  <th className="px-6 py-4">Status</th>
+                  {isAdminOrHr && <th className="px-6 py-4 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {loading ? (
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Employee
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Check In
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Check Out
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Total Hours
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Status
-                    </th>
+                    <td colSpan={isAdminOrHr ? 6 : 5} className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+                        <p className="text-sm font-medium">Loading records...</p>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {attendances.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-gray-700 font-medium">
-                        {formatDate(record.date)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.employee
-                          ? `${record.employee.first_name} ${record.employee.last_name}`
-                          : employeeLookup[record.employee_id]
-                          ? `${employeeLookup[record.employee_id].first_name} ${employeeLookup[record.employee_id].last_name}`
-                          : "Unknown"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <button
-                          onClick={() => handleRowClock("in", record.employee_id)}
-                          disabled={!!todayStatuses[record.employee_id]?.check_in || adminClocking}
-                          className="flex items-center justify-center gap-2 px-3 py-1.5 border border-blue-200 text-blue-700 rounded-lg bg-white hover:border-blue-300 hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
-                        >
-                          {todayStatuses[record.employee_id]?.check_in
-                            ? `In ${formatTime(todayStatuses[record.employee_id].check_in)}`
-                            : adminClocking && rowClockingId === record.employee_id
-                            ? "Processing..."
-                            : "Clock In"}
-                        </button>
+                ) : attendances.length === 0 ? (
+                  <tr>
+                    <td colSpan={isAdminOrHr ? 6 : 5} className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                          <Calendar className="w-6 h-6 text-gray-300" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-900">No records found</p>
+                        <p className="text-xs text-gray-400 mt-1">Try adjusting your filters</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  attendances.map((record) => {
+                    const emp = record.employee || employeeLookup[record.employee_id];
+                    const firstName = emp?.first_name || "Unknown";
+                    const lastName = emp?.last_name || "";
+                    const empCode = (emp as any)?.employee_code || "";
+
+                    return (
+                    <tr key={record.id} className="hover:bg-gray-50/80 transition-colors group">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        {new Date(record.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        <button
-                          onClick={() => handleRowClock("out", record.employee_id)}
-                          disabled={!todayStatuses[record.employee_id]?.check_in || !!todayStatuses[record.employee_id]?.check_out || adminClocking}
-                          className="flex items-center justify-center gap-2 px-3 py-1.5 border border-red-200 text-red-700 rounded-lg bg-white hover:border-red-300 hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
-                        >
-                          {todayStatuses[record.employee_id]?.check_out
-                            ? `Out ${formatTime(todayStatuses[record.employee_id].check_out)}`
-                            : adminClocking && rowClockingId === record.employee_id
-                            ? "Processing..."
-                            : "Clock Out"}
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                            {firstName[0]}{lastName[0]}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{firstName} {lastName}</p>
+                            <p className="text-xs text-gray-400">{empCode}</p>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {record.total_hours ? `${record.total_hours.toFixed(2)} hrs` : "-"}
+                      <td className="px-6 py-4 text-sm text-gray-600 font-mono">
+                        {record.check_in ? formatTime(record.check_in) : "--:--"}
                       </td>
-                      <td className="px-6 py-4 text-sm">
+                      <td className="px-6 py-4 text-sm text-gray-600 font-mono">
+                        {record.check_out ? formatTime(record.check_out) : "--:--"}
+                      </td>
+                      <td className="px-6 py-4">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                             record.is_late
-                              ? "bg-red-100 text-red-800"
-                              : "bg-green-100 text-green-800"
+                              ? "bg-red-50 text-red-700 border-red-100"
+                              : "bg-green-50 text-green-700 border-green-100"
                           }`}
                         >
                           {record.is_late ? "Late" : "On Time"}
                         </span>
                       </td>
+                      {isAdminOrHr && (
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleRowClock("in", record.employee_id)}
+                              disabled={!!todayStatuses[record.employee_id]?.check_in}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                              title="Clock In"
+                            >
+                              <Clock className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRowClock("out", record.employee_id)}
+                              disabled={!todayStatuses[record.employee_id]?.check_in || !!todayStatuses[record.employee_id]?.check_out}
+                              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                              title="Clock Out"
+                            >
+                              <LogOutIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page === totalPages}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </>
-        )}
+          {/* Pagination */}
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/30 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Page <span className="font-medium text-gray-900">{page}</span> of <span className="font-medium text-gray-900">{totalPages}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </HRMSSidebar>
   );

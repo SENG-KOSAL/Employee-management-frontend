@@ -10,8 +10,9 @@ import { leaveAllocationsService, type LeaveAllocation } from "@/services/leaveA
 import type { LeaveType } from "@/types/hr";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, User, Lock, Gift, CalendarClock } from "lucide-react";
-type TabType = "personal" | "account" | "benefits" | "attendance";
+import { ArrowLeft, User, Lock, Gift, CalendarClock, Clock } from "lucide-react";
+import { workSchedulesService } from "@/services/workSchedules";
+type TabType = "personal" | "account" | "benefits" | "attendance" | "work-schedule";
 
 interface CatalogItem {
   id?: number | string;
@@ -55,6 +56,7 @@ const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "account", label: "User Account", icon: Lock },
   { id: "benefits", label: "Benefits & Deductions", icon: Gift },
   { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
+  { id: "work-schedule", label: "Work Schedule", icon: Clock },
 ];
 
 export default function EditEmployeePage() {
@@ -99,6 +101,15 @@ export default function EditEmployeePage() {
   });
   const [allocLoading, setAllocLoading] = useState(false);
   const [allocError, setAllocError] = useState("");
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [schedulesError, setSchedulesError] = useState("");
+  const [assigningSchedule, setAssigningSchedule] = useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
+  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [scheduleAssignError, setScheduleAssignError] = useState("");
+  const [scheduleAssignSuccess, setScheduleAssignSuccess] = useState("");
+  const [currentSchedule, setCurrentSchedule] = useState<any>(null);
   const [formData, setFormData] = useState<FormData>({
     employee_code: "",
     first_name: "",
@@ -149,6 +160,22 @@ export default function EditEmployeePage() {
     return Number.isFinite(Number(candidate)) ? Number(candidate) : 0;
   };
 
+  const loadSchedules = async () => {
+    try {
+      setSchedulesLoading(true);
+      setSchedulesError("");
+      const res = await workSchedulesService.list();
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setSchedules(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load work schedules", err);
+      setSchedulesError("Unable to load work schedules");
+      setSchedules([]);
+    } finally {
+      setSchedulesLoading(false);
+    }
+  };
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -157,6 +184,7 @@ export default function EditEmployeePage() {
     }
     if (id) fetchEmployee(id);
     loadLeaveTypes();
+    loadSchedules();
   }, [id, router]);
 
   const fetchEmployee = async (empId: string | number) => {
@@ -263,6 +291,13 @@ export default function EditEmployeePage() {
         social_security_percentage: data.deductions?.social_security_percentage ?? 6.2,
         health_insurance_deduction: data.deductions?.health_insurance_deduction ?? 0,
       }));
+      setSelectedScheduleId(data?.work_schedule_id ? String(data.work_schedule_id) : "");
+      setScheduleEffectiveFrom(
+        data?.work_schedule?.effective_from
+          ? String(data.work_schedule.effective_from).slice(0, 10)
+          : new Date().toISOString().slice(0, 10)
+      );
+      setCurrentSchedule(data?.work_schedule ?? null);
       const allocList = allocationsRes ? (allocationsRes as any)?.data?.data ?? (allocationsRes as any)?.data ?? [] : [];
       const normalizedAllocations: LeaveAllocation[] = Array.isArray(allocList) ? allocList : [];
       setAllocations(normalizedAllocations);
@@ -546,6 +581,44 @@ export default function EditEmployeePage() {
       setAllocError(err?.response?.data?.message || "Failed to delete allocation");
     } finally {
       setAllocLoading(false);
+    }
+  };
+
+  const handleAssignSchedule = async () => {
+    if (!id || !selectedScheduleId) return;
+    if (!scheduleEffectiveFrom) {
+      setScheduleAssignError("Please choose an effective date");
+      return;
+    }
+    try {
+      setAssigningSchedule(true);
+      setScheduleAssignError("");
+      setScheduleAssignSuccess("");
+      const res = await workSchedulesService.assignToEmployee(
+        Number(id),
+        Number(selectedScheduleId),
+        scheduleEffectiveFrom
+      );
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? null;
+      const selected = schedules.find((s) => String(s.id) === String(selectedScheduleId));
+      const resolvedSchedule = {
+        ...(data?.work_schedule || data || selected || {
+          id: Number(selectedScheduleId),
+          name: selected?.name || "Work Schedule",
+          working_days: selected?.working_days,
+          hours_per_day: selected?.hours_per_day,
+          notes: selected?.notes,
+        }),
+        effective_from: data?.effective_from ?? data?.work_schedule?.effective_from ?? scheduleEffectiveFrom,
+      };
+      setCurrentSchedule(resolvedSchedule);
+      setScheduleAssignSuccess("Work schedule assigned");
+      setTimeout(() => setScheduleAssignSuccess(""), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setScheduleAssignError(err?.response?.data?.message || "Failed to assign work schedule");
+    } finally {
+      setAssigningSchedule(false);
     }
   };
 
@@ -1293,6 +1366,85 @@ export default function EditEmployeePage() {
                     </div>
                   ) : (
                     <p className="text-sm text-gray-600">No leave allocations yet. Add one above.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "work-schedule" && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Work Schedule</h2>
+                    <p className="text-sm text-gray-500">Assign or change the employee's work schedule and effective date.</p>
+                  </div>
+                  <Link href="/settings/work-schedules" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Manage Schedules
+                  </Link>
+                </div>
+
+                <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div className="min-w-56 flex-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Select Schedule</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={selectedScheduleId}
+                        onChange={(e) => setSelectedScheduleId(e.target.value)}
+                        disabled={schedulesLoading}
+                      >
+                        <option value="">Choose schedule</option>
+                        {schedules.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} • {s.hours_per_day}h/day
+                          </option>
+                        ))}
+                      </select>
+                      {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
+                    </div>
+                    <div className="min-w-40">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={scheduleEffectiveFrom}
+                        onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAssignSchedule}
+                      disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {assigningSchedule ? "Assigning..." : "Assign"}
+                    </button>
+                  </div>
+                  {scheduleAssignError && <p className="text-sm text-red-600">{scheduleAssignError}</p>}
+                  {scheduleAssignSuccess && <p className="text-sm text-green-600">{scheduleAssignSuccess}</p>}
+                  <p className="text-xs text-gray-500">Effective date is required when assigning a schedule.</p>
+                </div>
+
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                  <p className="text-xs font-semibold text-gray-600 uppercase">Current Schedule</p>
+                  {currentSchedule ? (
+                    <div className="space-y-1 text-sm text-gray-800">
+                      <p className="font-medium text-gray-900">{currentSchedule.name}</p>
+                      <p>{currentSchedule.hours_per_day ?? "-"} hours per day</p>
+                      {currentSchedule.effective_from ? (
+                        <p>Effective from: {currentSchedule.effective_from}</p>
+                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {(currentSchedule.working_days || []).map((d: string) => (
+                          <span key={d} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                            {d.toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                      {currentSchedule.notes ? <p className="text-sm text-gray-600">{currentSchedule.notes}</p> : null}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No schedule assigned yet.</p>
                   )}
                 </div>
               </div>
