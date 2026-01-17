@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
+import { fetchMe, getCachedMe } from "@/lib/meCache";
 import { Clock, LogOut as LogOutIcon, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 
@@ -40,6 +41,7 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [errorDebug, setErrorDebug] = useState<string>("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [fromDate, setFromDate] = useState("");
@@ -53,6 +55,10 @@ export default function AttendancePage() {
   const [adminClocking, setAdminClocking] = useState(false);
   const [rowClockingId, setRowClockingId] = useState<number | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
+
+  const normalizedRole = (user?.role || "").toLowerCase();
+  const isAdminOrHr = normalizedRole === "admin" || normalizedRole === "hr";
+  const isEmployee = normalizedRole === "employee";
 
   const employeeLookup = useMemo(() => {
     const map: Record<number, Employee> = {};
@@ -88,11 +94,58 @@ export default function AttendancePage() {
       router.push("/auth/login");
       return;
     }
-    fetchUser();
-    fetchEmployees();
-    checkTodayStatus();
-    fetchTodayStatuses();
+    const cached = getCachedMe();
+    if (cached) {
+      setUser(cached);
+      return;
+    }
+
+    const loadUser = async () => {
+      try {
+        const me = await fetchMe();
+        setUser(me);
+      } catch (err) {
+        console.error("Failed to fetch user:", err);
+      }
+    };
+
+    loadUser();
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // lock down scope for employees
+    if (user.role === "employee") {
+      const empId = user.employee?.id;
+      if (empId) {
+        setEmployeeFilter(String(empId));
+        setEmployees((prev) => {
+          const exists = prev.find((e) => e.id === empId);
+          if (exists) return prev;
+          const fullName = user.employee?.full_name || "";
+          const [first_name, ...rest] = fullName.split(" ");
+          return [
+            {
+              id: empId,
+              first_name: first_name || user.name || "",
+              last_name: rest.join(" ") || "",
+              employee_code: user.employee?.employee_code || "",
+              email: user.email,
+              phone: user.employee?.phone,
+              department: user.employee?.department,
+              position: user.employee?.position,
+            },
+          ];
+        });
+      }
+    } else {
+      fetchEmployees();
+      fetchTodayStatuses();
+    }
+
+    checkTodayStatus();
+  }, [user]);
 
   useEffect(() => {
     const token = getToken();
@@ -101,25 +154,18 @@ export default function AttendancePage() {
   }, [page, fromDate, toDate, employeeFilter]);
 
   useEffect(() => {
+    if (!isAdminOrHr) return;
     if (!actionEmployeeId && employees.length > 0) {
       setActionEmployeeId(employees[0].id.toString());
     }
-  }, [employees, actionEmployeeId]);
+  }, [employees, actionEmployeeId, isAdminOrHr]);
 
   useEffect(() => {
+    if (!isAdminOrHr) return;
     if (!actionEmployeeId && filteredEmployees.length > 0) {
       setActionEmployeeId(filteredEmployees[0].id.toString());
     }
-  }, [filteredEmployees, actionEmployeeId]);
-
-  const fetchUser = async () => {
-    try {
-      const res = await api.get("/api/v1/me");
-      setUser(res.data.data || res.data);
-    } catch (err) {
-      console.error("Failed to fetch user:", err);
-    }
-  };
+  }, [filteredEmployees, actionEmployeeId, isAdminOrHr]);
 
   const fetchEmployees = async () => {
     try {
@@ -136,7 +182,11 @@ export default function AttendancePage() {
   const checkTodayStatus = async () => {
     try {
       const today = new Date().toISOString().split("T")[0];
-      const res = await api.get(`/api/v1/attendances?from=${today}&to=${today}&per_page=1`);
+      const params = new URLSearchParams({ from: today, to: today, per_page: "1" });
+      if (user?.role === "employee" && user.employee?.id) {
+        params.append("employee_id", String(user.employee.id));
+      }
+      const res = await api.get(`/api/v1/attendances?${params.toString()}`);
       const data = res.data.data || res.data;
       const items = Array.isArray(data) ? data : data.data || [];
       setTodayStatus(items[0] || null);
@@ -164,6 +214,8 @@ export default function AttendancePage() {
   const fetchAttendances = async () => {
     try {
       setLoading(true);
+      setError("");
+      setErrorDebug("");
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: "10",
@@ -172,7 +224,7 @@ export default function AttendancePage() {
       if (toDate) params.append("to", toDate);
       if (employeeFilter) params.append("employee_id", employeeFilter);
 
-      const res = await api.get(`/api/v1/attendances?${params}`);
+      const res = await api.get(`/api/v1/attendances?${params.toString()}`);
       const data = res.data.data || res.data;
 
       const items = Array.isArray(data) ? data : data.data || [];
@@ -198,9 +250,39 @@ export default function AttendancePage() {
         setTotalPages((data.last_page as number) || data.meta?.last_page || 1);
       }
       setError("");
-    } catch (err) {
-      setError("Failed to load attendance records");
-      console.error(err);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const backendMessage = err?.response?.data?.message;
+      const errors = err?.response?.data?.errors;
+      const message = backendMessage || (status ? `Failed to load attendance records (status ${status})` : "Failed to load attendance records");
+      setError(message);
+      setErrorDebug(
+        JSON.stringify(
+          {
+            status,
+            backendMessage,
+            errors,
+            query: { page, fromDate, toDate, employeeFilter },
+            responseData: err?.response?.data,
+          },
+          null,
+          2
+        )
+      );
+
+      // Structured console debug for quick diagnosis
+      console.error("fetchAttendances error", {
+        message,
+        status,
+        errors,
+        query: {
+          page,
+          fromDate,
+          toDate,
+          employeeFilter,
+        },
+        responseData: err?.response?.data,
+      });
     } finally {
       setLoading(false);
     }
@@ -331,7 +413,6 @@ export default function AttendancePage() {
     }
   };
 
-  const isAdminOrHr = user?.role === "admin" || user?.role === "hr";
   const selectedAdminStatus = actionEmployeeId
     ? todayStatuses[Number(actionEmployeeId)]
     : null;
@@ -355,6 +436,12 @@ export default function AttendancePage() {
             <div className="w-2 h-2 rounded-full bg-red-500"></div>
             {error}
           </div>
+        )}
+
+        {errorDebug && (
+          <pre className="text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded-lg p-3 overflow-auto max-h-48">
+{errorDebug}
+          </pre>
         )}
 
         {success && (
@@ -431,7 +518,7 @@ export default function AttendancePage() {
 
         {/* Admin & Filters Container */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Admin Controls */}
+          {/* Admin Controls (hide for employee) */}
           {isAdminOrHr && (
             <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-6">
@@ -524,19 +611,21 @@ export default function AttendancePage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Employee</label>
-                <select
-                  value={employeeFilter}
-                  onChange={(e) => { setEmployeeFilter(e.target.value); setPage(1); }}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                >
-                  <option value="">All Employees</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
-                  ))}
-                </select>
-              </div>
+              {isAdminOrHr && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Employee</label>
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => { setEmployeeFilter(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                  >
+                    <option value="">All Employees</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -682,3 +771,10 @@ export default function AttendancePage() {
     </HRMSSidebar>
   );
 }
+
+
+
+
+
+
+
