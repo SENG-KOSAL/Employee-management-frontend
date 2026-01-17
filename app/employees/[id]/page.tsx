@@ -7,9 +7,10 @@ import api from "@/services/api";
 import { benefitsService } from "@/services/benefits";
 import { leaveAllocationsService } from "@/services/leaveAllocations";
 import { leaveTypesService } from "@/services/leaveTypes";
+import { overtimesService } from "@/services/overtimes";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock, Check, X, KeyRound } from "lucide-react";
 import { workSchedulesService } from "@/services/workSchedules";
 import type { LeaveType } from "@/types/hr";
 
@@ -108,7 +109,21 @@ export default function EmployeeDetailPage() {
   const [allocationsLoaded, setAllocationsLoaded] = useState(false);
   const [schedulesLoaded, setSchedulesLoaded] = useState(false);
   const [scheduleHistoryLoaded, setScheduleHistoryLoaded] = useState(false);
+  const [overtimes, setOvertimes] = useState<any[]>([]);
+  const [overtimeLoading, setOvertimeLoading] = useState(false);
+  const [overtimeLoaded, setOvertimeLoaded] = useState(false);
+  const [overtimeSaving, setOvertimeSaving] = useState(false);
+  const [overtimeError, setOvertimeError] = useState("");
+  const [overtimeSuccess, setOvertimeSuccess] = useState("");
+  const [overtimeDate, setOvertimeDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [overtimeHours, setOvertimeHours] = useState<string>("");
+  const [overtimeReason, setOvertimeReason] = useState<string>("");
 
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
+  const [accountForm, setAccountForm] = useState({ name: "", role: "", password: "", password_confirmation: "" });
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [accountSuccess, setAccountSuccess] = useState("");
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -130,6 +145,15 @@ export default function EmployeeDetailPage() {
       setAllocationError("");
       setScheduleAssignError("");
       setScheduleAssignSuccess("");
+      setOvertimes([]);
+      setOvertimeLoading(false);
+      setOvertimeLoaded(false);
+      setOvertimeSaving(false);
+      setOvertimeError("");
+      setOvertimeSuccess("");
+      setOvertimeHours("");
+      setOvertimeReason("");
+      setOvertimeDate(new Date().toISOString().slice(0, 10));
       fetchEmployee(id);
     }
   }, [id]);
@@ -139,8 +163,13 @@ export default function EmployeeDetailPage() {
     if (activeTab === "benefits" && !benefitsLoaded && !benefitsLoading) {
       loadBenefitsAndDeductions(Number(id));
     }
-    if (activeTab === "attendance" && !allocationsLoaded && !allocationsLoading) {
-      loadAttendanceData(Number(id));
+    if (activeTab === "attendance") {
+      if (!allocationsLoaded && !allocationsLoading) {
+        loadAttendanceData(Number(id));
+      }
+      if (!overtimeLoaded && !overtimeLoading) {
+        loadOvertimes(Number(id));
+      }
     }
     if (activeTab === "work-schedule") {
       if (!schedulesLoaded && !schedulesLoading) {
@@ -150,7 +179,7 @@ export default function EmployeeDetailPage() {
         loadEmployeeSchedules(id);
       }
     }
-  }, [activeTab, id, benefitsLoaded, benefitsLoading, allocationsLoaded, allocationsLoading, schedulesLoaded, schedulesLoading, scheduleHistoryLoaded]);
+  }, [activeTab, id, benefitsLoaded, benefitsLoading, allocationsLoaded, allocationsLoading, schedulesLoaded, schedulesLoading, scheduleHistoryLoaded, overtimeLoaded, overtimeLoading]);
 
   const loadLeaveTypes = async () => {
     try {
@@ -330,12 +359,38 @@ export default function EmployeeDetailPage() {
     await Promise.all([loadLeaveTypes(), loadAllocations(empId)]);
   };
 
+  const loadOvertimes = async (empId: number) => {
+    try {
+      setOvertimeLoading(true);
+      setOvertimeError("");
+      const res = await overtimesService.listByEmployee(empId);
+      const list = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setOvertimes(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error(err);
+      setOvertimeError("Failed to load overtime records");
+      setOvertimes([]);
+    } finally {
+      setOvertimeLoading(false);
+      setOvertimeLoaded(true);
+    }
+  };
+
   const fetchEmployee = async (empId: string | number) => {
     try {
       setLoading(true);
       const empRes = await api.get(`/api/v1/employees/${empId}`);
       const empData = empRes.data.data || empRes.data;
       setEmployee(empData);
+      setAccountForm({
+        name: empData?.user?.name || `${empData?.first_name ?? ""} ${empData?.last_name ?? ""}`.trim(),
+        role: empData?.user?.role || "employee",
+        password: "",
+        password_confirmation: "",
+      });
+      setIsEditingAccount(false);
+      setAccountError("");
+      setAccountSuccess("");
       if (empData?.work_schedule_id) {
         setSelectedScheduleId(String(empData.work_schedule_id));
       }
@@ -557,6 +612,153 @@ export default function EmployeeDetailPage() {
     );
   };
 
+  const handleCreateOvertime = async () => {
+    if (!employee?.id) return;
+    if (!overtimeDate || !overtimeHours) {
+      setOvertimeError("Date and hours are required");
+      return;
+    }
+    try {
+      setOvertimeSaving(true);
+      setOvertimeError("");
+      setOvertimeSuccess("");
+      const payload = {
+        employee_id: Number(employee.id),
+        date: overtimeDate,
+        hours: Number(overtimeHours),
+        reason: overtimeReason || undefined,
+      };
+      const res = await overtimesService.create(payload as any);
+      const created = (res as any)?.data?.data ?? (res as any)?.data ?? payload;
+      setOvertimes((prev) => [created, ...(Array.isArray(prev) ? prev : [])]);
+      setOvertimeHours("");
+      setOvertimeReason("");
+      setOvertimeSuccess("Overtime added");
+      setTimeout(() => setOvertimeSuccess(""), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setOvertimeError(err?.response?.data?.message || "Failed to add overtime");
+    } finally {
+      setOvertimeSaving(false);
+    }
+  };
+
+  const startEditAccount = () => {
+    if (!employee) return;
+    setAccountForm({
+      name: employee.user?.name || `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim(),
+      role: employee.user?.role || "employee",
+      password: "",
+      password_confirmation: "",
+    });
+    setAccountError("");
+    setAccountSuccess("");
+    setIsEditingAccount(true);
+  };
+
+  const cancelEditAccount = () => {
+    if (!employee) {
+      setIsEditingAccount(false);
+      return;
+    }
+    setAccountForm({
+      name: employee.user?.name || `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim(),
+      role: employee.user?.role || "employee",
+      password: "",
+      password_confirmation: "",
+    });
+    setAccountError("");
+    setAccountSuccess("");
+    setIsEditingAccount(false);
+  };
+
+  const handleAccountFieldChange = (field: keyof typeof accountForm, value: string) => {
+    setAccountForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveAccount = async () => {
+    if (!employee?.id) return;
+    setAccountError("");
+    setAccountSuccess("");
+
+    const name = (accountForm.name || `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim()).trim();
+    const role = accountForm.role || employee.user?.role || "employee";
+
+    if (!name) {
+      setAccountError("Account name is required");
+      return;
+    }
+    if (!role) {
+      setAccountError("Role is required");
+      return;
+    }
+    if (accountForm.password && accountForm.password !== accountForm.password_confirmation) {
+      setAccountError("Passwords do not match");
+      return;
+    }
+
+    // ensure core employee fields are present for the update request
+    const requiredFields: Array<[string, any]> = [
+      ["employee_code", employee.employee_code],
+      ["first_name", employee.first_name],
+      ["last_name", employee.last_name],
+      ["email", employee.email],
+      ["start_date", employee.start_date],
+      ["salary", employee.salary],
+    ];
+    const missing = requiredFields.filter(([, v]) => v === undefined || v === null || v === "");
+    if (missing.length) {
+      setAccountError("Some employee fields are missing. Please edit the employee profile first.");
+      return;
+    }
+
+    const payload: any = {
+      employee_code: employee.employee_code,
+      first_name: employee.first_name,
+      last_name: employee.last_name,
+      email: employee.email,
+      phone: employee.phone || "",
+      gender: employee.gender || "",
+      date_of_birth: employee.date_of_birth || "",
+      address: employee.address || "",
+      department: employee.department || "",
+      position: employee.position || "",
+      start_date: employee.start_date || "",
+      salary: Number(employee.salary ?? 0),
+      status: employee.status || "active",
+      name,
+      role,
+      benefits: employee.benefits || {},
+      deductions: employee.deductions || {},
+    };
+
+    if (accountForm.password) {
+      payload.password = accountForm.password;
+    }
+
+    try {
+      setSavingAccount(true);
+      await api.put(`/api/v1/employees/${employee.id}`, payload);
+      setEmployee((prev) =>
+        prev
+          ? {
+              ...prev,
+              user: { ...(prev.user || {}), name, role },
+            }
+          : prev
+      );
+      setAccountSuccess("Account updated");
+      setIsEditingAccount(false);
+      setAccountForm((prev) => ({ ...prev, password: "", password_confirmation: "" }));
+      setTimeout(() => setAccountSuccess(""), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setAccountError(err?.response?.data?.message || "Failed to update account");
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
   const handleAllocationEditChange = (
     id: number,
     field: keyof { leave_type_id: number; year: number; days_allocated: number; days_used?: number; note?: string },
@@ -719,16 +921,117 @@ export default function EmployeeDetailPage() {
                 )}
 
                 {activeTab === "account" && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-800">User Account</h3>
-                    {employee.user ? (
-                      <div className="space-y-2 text-gray-700 text-sm">
-                        <div className="flex items-center gap-2"><UserCircle2 className="w-4 h-4" /> {employee.user.name}</div>
-                        <div className="text-gray-700">Role: {employee.user.role}</div>
-                        <div className="text-gray-700">User ID: {employee.user.id}</div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">User Account</h3>
+                      {isEditingAccount ? (
+                        <button
+                          type="button"
+                          onClick={cancelEditAccount}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                        >
+                          <X className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={startEditAccount}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          Edit Account
+                        </button>
+                      )}
+                    </div>
+
+                    {accountError ? (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{accountError}</div>
+                    ) : null}
+                    {accountSuccess ? (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">{accountSuccess}</div>
+                    ) : null}
+
+                    {isEditingAccount ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Name</label>
+                            <input
+                              type="text"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                              value={accountForm.name}
+                              onChange={(e) => handleAccountFieldChange("name", e.target.value)}
+                              placeholder={`${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Account name"}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Role</label>
+                            <select
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                              value={accountForm.role}
+                              onChange={(e) => handleAccountFieldChange("role", e.target.value)}
+                            >
+                              <option value="employee">Employee</option>
+                              <option value="manager">Manager</option>
+                              <option value="hr">HR</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Password (leave blank to keep)</label>
+                            <input
+                              type="password"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                              value={accountForm.password}
+                              onChange={(e) => handleAccountFieldChange("password", e.target.value)}
+                              placeholder="••••••••"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Password</label>
+                            <input
+                              type="password"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                              value={accountForm.password_confirmation}
+                              onChange={(e) => handleAccountFieldChange("password_confirmation", e.target.value)}
+                              placeholder="••••••••"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveAccount}
+                            disabled={savingAccount}
+                            className="inline-flex items-center gap-1 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Check className="w-4 h-4" />
+                            {savingAccount ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditAccount}
+                            className="inline-flex items-center gap-1 px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">No account linked</p>
+                      <div className="space-y-2 text-gray-700 text-sm">
+                        {employee.user ? (
+                          <>
+                            <div className="flex items-center gap-2"><UserCircle2 className="w-4 h-4" /> {employee.user.name}</div>
+                            <div className="text-gray-700">Role: {employee.user.role}</div>
+                            <div className="text-gray-700">User ID: {employee.user.id}</div>
+                            <p className="text-xs text-gray-500">Use Edit Account to change name, role, or password.</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-500">No account linked. Click Edit Account to create one.</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -836,6 +1139,71 @@ export default function EmployeeDetailPage() {
                     <h3 className="text-sm font-semibold text-gray-800">Attendance & Leave</h3>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
                       Leave allocations are shown below. Use the form to add or change the default leave type for this employee.
+                    </div>
+                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                      <div className="flex flex-wrap gap-3 items-end">
+                        <div className="min-w-40">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">OT Date</label>
+                          <input
+                            type="date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={overtimeDate}
+                            onChange={(e) => setOvertimeDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="min-w-32">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.25"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={overtimeHours}
+                            onChange={(e) => setOvertimeHours(e.target.value)}
+                            placeholder="e.g., 2"
+                          />
+                        </div>
+                        <div className="min-w-48 flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Reason (optional)</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                            value={overtimeReason}
+                            onChange={(e) => setOvertimeReason(e.target.value)}
+                            placeholder="e.g., Project deadline"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCreateOvertime}
+                          disabled={overtimeSaving || !overtimeDate || !overtimeHours}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {overtimeSaving ? "Saving..." : "Add OT"}
+                        </button>
+                      </div>
+                      {overtimeError && <p className="text-sm text-red-600">{overtimeError}</p>}
+                      {overtimeSuccess && <p className="text-sm text-green-600">{overtimeSuccess}</p>}
+                      <div className="pt-2 space-y-2">
+                        <p className="text-xs font-semibold text-gray-600 uppercase">Overtime Records</p>
+                        {overtimeLoading && <p className="text-sm text-gray-500">Loading...</p>}
+                        {!overtimeLoading && (!overtimes || overtimes.length === 0) ? (
+                          <p className="text-sm text-gray-500">No overtime records yet.</p>
+                        ) : null}
+                        {!overtimeLoading && Array.isArray(overtimes) && overtimes.length > 0 ? (
+                          <div className="space-y-2">
+                            {overtimes.map((ot, idx) => (
+                              <div key={ot.id ?? idx} className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 flex items-center justify-between">
+                                <div className="space-y-1">
+                                  <p className="font-medium text-gray-900">{ot.date}</p>
+                                  <p className="text-xs text-gray-600">Hours: {ot.hours}</p>
+                                  {ot.reason ? <p className="text-xs text-gray-500">Reason: {ot.reason}</p> : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
                       <div className="flex flex-wrap gap-3 items-end">

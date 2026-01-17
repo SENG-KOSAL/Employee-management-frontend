@@ -13,6 +13,7 @@ import {
   BarChart3,
   Shield,
   Settings,
+  CalendarClock,
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
@@ -39,6 +40,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { clearMeCache, fetchMe, getCachedMe } from "@/lib/meCache"
 import api from "@/services/api"
 import { getToken, removeToken } from "@/utils/auth"
 import { useRouter } from "next/navigation"
@@ -47,10 +49,50 @@ type MePayload = {
   name?: string
   employee?: {
     full_name?: string | null
+    id?: number
+    role?: string | null
   } | null
+  role?: string | null
 }
 
-// Navigation structure
+const employeeNavigation = {
+  main: [
+    {
+      title: "My Attendance",
+      icon: Clock,
+      href: "/attendance/employee",
+    },
+    {
+      title: "Request Leave",
+      icon: CalendarClock,
+      href: "/leave-requests/employee",
+    },
+  ],
+  system: [],
+}
+
+const managerNavigation = {
+  main: [
+    {
+      title: "Team Attendance",
+      icon: Clock,
+      href: "/attendance/manager",
+    },
+    {
+      title: "Approve Leave",
+      icon: CalendarClock,
+      href: "/leave-requests/manager",
+    },
+    {
+      title: "Request Leave",
+      icon: CalendarClock,
+      href: "/leave-requests/employee",
+    },
+  ],
+  system: [],
+}
+
+// Navigation structure for admins/managers
 const navigation = {
   main: [
     {
@@ -63,8 +105,8 @@ const navigation = {
       icon: Users,
       items: [
         { title: "Employees", href: "/employees" },
-        { title: "Departments", href: "/departments" },
-        { title: "Positions / Roles", href: "/positions" },
+        // { title: "Departments", href: "/departments" },
+        // { title: "Positions / Roles", href: "/positions" },
       ],
     },
     {
@@ -74,6 +116,7 @@ const navigation = {
         { title: "Attendance", href: "/attendance" },
         { title: "Leave Requests", href: "/leave-requests" },
         { title: "Holidays", href: "/holidays" },
+        { title: "Overtime", href: "/request/OverTime" },
       ],
     },
     {
@@ -82,21 +125,22 @@ const navigation = {
       items: [
         { title: "Salary", href: "/salary" },
         { title: "Payslips", href: "/payslips" },
+        { title: "Payroll", href: "/payroll" },
       ],
     },
-    {
-      title: "Recruitment",
-      icon: Megaphone,
-      items: [
-        { title: "Job Posts", href: "/job-posts" },
-        { title: "Applicants", href: "/applicants" },
-      ],
-    },
-    {
-      title: "Performance",
-      icon: BarChart3,
-      items: [{ title: "Performance Reviews", href: "/performance-reviews" }],
-    },
+    // {
+    //   title: "Recruitment",
+    //   icon: Megaphone,
+    //   items: [
+    //     { title: "Job Posts", href: "/job-posts" },
+    //     { title: "Applicants", href: "/applicants" },
+    //   ],
+    // },
+    // {
+    //   title: "Performance",
+    //   icon: BarChart3,
+    //   items: [{ title: "Performance Reviews", href: "/performance-reviews" }],
+    // },
   ],
   system: [
     {
@@ -173,7 +217,7 @@ function NavItem({
   )
 }
 
-function SidebarNav() {
+function SidebarNav({ nav }: { nav: typeof navigation | typeof employeeNavigation }) {
   const pathname = usePathname()
 
   return (
@@ -182,23 +226,25 @@ function SidebarNav() {
         <SidebarGroupLabel>Main</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            {navigation.main.map((item) => (
+            {nav.main.map((item) => (
               <NavItem key={item.title} item={item} pathname={pathname} />
             ))}
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <SidebarGroup>
-        <SidebarGroupLabel>System</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            {navigation.system.map((item) => (
-              <NavItem key={item.title} item={item} pathname={pathname} />
-            ))}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+      {nav.system.length > 0 ? (
+        <SidebarGroup>
+          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {nav.system.map((item) => (
+                <NavItem key={item.title} item={item} pathname={pathname} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      ) : null}
     </>
   )
 }
@@ -220,6 +266,8 @@ function CollapseToggle() {
 export function HRMSSidebar({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [displayName, setDisplayName] = useState<string>("")
+  const [me, setMe] = useState<MePayload | null>(null)
+  const userRole = useMemo(() => me?.role || me?.employee?.role || null, [me])
 
   const initials = useMemo(() => {
     const raw = displayName.trim()
@@ -234,13 +282,20 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
     const token = getToken()
     if (!token) return
 
+    const cached = getCachedMe()
+    if (cached) {
+      const name = cached.employee?.full_name || cached.name || ""
+      setDisplayName(name)
+      setMe(cached)
+      return
+    }
+
     const loadMe = async () => {
       try {
-        const res = await api.get("/api/v1/me")
-        const data: any = res.data?.data ?? res.data
-        const me: MePayload = data ?? {}
-        const name = me.employee?.full_name || me.name || ""
+        const data = await fetchMe()
+        const name = data?.employee?.full_name || data?.name || ""
         setDisplayName(name)
+        setMe(data)
       } catch {
         // ignore; we'll just show initials placeholder
       }
@@ -256,6 +311,7 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
       // ignore network/API errors; still clear local token
     } finally {
       removeToken()
+      clearMeCache()
       router.push("/auth/login")
     }
   }
@@ -278,7 +334,15 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
 
         {/* Navigation Content */}
         <SidebarContent className="px-2 py-2">
-          <SidebarNav />
+          <SidebarNav
+            nav={
+              userRole === "employee"
+                ? employeeNavigation
+                : userRole === "manager"
+                ? managerNavigation
+                : navigation
+            }
+          />
         </SidebarContent>
 
         {/* Footer with Collapse Toggle */}
