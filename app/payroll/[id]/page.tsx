@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User } from "lucide-react";
+import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User, Download, Printer } from "lucide-react";
 
 interface PayrollItem {
   id: number;
@@ -170,7 +170,60 @@ export default function PayrollRunDetailPage() {
       return matches && (!shouldFilterIssues || hasIssues);
     });
     return items;
-  }, [data?.payrolls, search]);
+  }, [data?.payrolls, search, showIssuesOnly]);
+
+  const handleExport = () => {
+    if (!data?.payrolls || data.payrolls.length === 0) {
+      setError("No payrolls to export");
+      return;
+    }
+
+    const items = filteredPayrolls.length ? filteredPayrolls : data.payrolls;
+    const headers = [
+      "Employee Code",
+      "Employee Name",
+      "Period Start",
+      "Period End",
+      "Base Pay",
+      "Overtime",
+      "Benefits",
+      "Deductions",
+      "Gross",
+      "Net",
+      "Status",
+      "Notes",
+    ];
+    const safe = (val: unknown) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+    const rows = items.map((p) => {
+      const name = p.employee?.full_name || `${p.employee?.first_name || ""} ${p.employee?.last_name || ""}`.trim();
+      return [
+        p.employee?.employee_code || "",
+        name,
+        p.period_start,
+        p.period_end,
+        p.base_pay,
+        p.overtime_pay,
+        p.benefits_total,
+        p.deductions_total,
+        p.gross_pay,
+        p.net_pay,
+        p.status,
+        p.notes || "",
+      ]
+        .map(safe)
+        .join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `payroll-run-${runId || "detail"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const totals = useMemo(() => {
     if (!data?.payrolls) return { headcount: 0, gross: 0, net: 0 };
@@ -193,6 +246,10 @@ export default function PayrollRunDetailPage() {
     }, {});
   }, [data?.payrolls]);
 
+  const handlePrintAllPayslips = () => {
+    router.push(`/payroll/${runId}/payslip/print-all?auto=1`);
+  };
+
   return (
     <HRMSSidebar>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -208,6 +265,18 @@ export default function PayrollRunDetailPage() {
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
               <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+            <button
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+            <button
+              onClick={handlePrintAllPayslips}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+            >
+              <Printer className="w-4 h-4" /> Print all
             </button>
             <button
               onClick={fetchDetail}

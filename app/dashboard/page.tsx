@@ -11,15 +11,36 @@ import {
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
+  Calendar,
+  FileText,
+  RefreshCw,
+  ChevronRight,
 } from "lucide-react";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useRecentActivity } from "@/hooks/useRecentActivity";
 
+function formatTime(date: string) {
+  const now = new Date();
+  const time = new Date(date);
+  const diffMs = now.getTime() - time.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return time.toLocaleDateString();
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadingUser, setLoadingUser] = useState(true);
+  const { stats, loading: loadingStats, error: statsError, refetch } = useDashboardStats(30000);
+  const { activities, loading: loadingActivities } = useRecentActivity();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -32,11 +53,10 @@ export default function DashboardPage() {
 
         const res = await api.get("/me");
         setUser(res.data.data || res.data);
-        setLoading(false);
+        setLoadingUser(false);
       } catch (err) {
-        // Avoid immediate redirect; show error to prevent loop
-        setError("Failed to load user data. Please ensure the API is reachable and you are authenticated.");
-        setLoading(false);
+        console.error("User fetch error:", err);
+        setLoadingUser(false);
       }
     };
 
@@ -54,127 +74,179 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (loadingUser) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
+  const statCards = [
+    {
+      label: "Total Employees",
+      value: stats.totalEmployees,
+      icon: Users,
+      color: "bg-blue-50 text-blue-600",
+      borderColor: "border-blue-200",
+      href: "/employees",
+    },
+    {
+      label: "Present Today",
+      value: stats.presentToday,
+      icon: Users,
+      color: "bg-green-50 text-green-600",
+      borderColor: "border-green-200",
+      href: "/attendance",
+    },
+    {
+      label: "On Leave",
+      value: stats.onLeave,
+      icon: Calendar,
+      color: "bg-amber-50 text-amber-600",
+      borderColor: "border-amber-200",
+      href: "/leave-requests",
+    },
+    {
+      label: "Pending Requests",
+      value: stats.pendingRequests,
+      icon: Clock,
+      color: "bg-purple-50 text-purple-600",
+      borderColor: "border-purple-200",
+      href: "/leave-requests",
+    },
+  ];
+
   return (
     <HRMSSidebar>
-      <div className="space-y-6">
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-            {error}
+      <div className="space-y-6 max-w-7xl">
+        {statsError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+            {statsError}
           </div>
         )}
 
-        {/* Welcome Card */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg p-8">
-          <h2 className="text-3xl font-bold">Welcome back, {user?.name || "Admin"}! 👋</h2>
-          <p className="text-blue-100 mt-2">
-            Here's what's happening with your team today.
-          </p>
+        {/* Header with Welcome & Quick Actions */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">Admin Dashboard</p>
+            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || "Admin"}! 👋</h1>
+            <p className="text-gray-600 mt-1">Real-time overview of your organization</p>
+          </div>
+          <button
+            onClick={refetch}
+            disabled={loadingStats}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingStats ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            {
-              label: "Total Employees",
-              value: "1,284",
-              icon: Users,
-              color: "bg-blue-50 text-blue-600",
-              trend: "+12%",
-              trending: "up",
-            },
-            {
-              label: "Present Today",
-              value: "1,156",
-              icon: Users,
-              color: "bg-green-50 text-green-600",
-              trend: "+3%",
-              trending: "up",
-            },
-            {
-              label: "On Leave",
-              value: "42",
-              icon: Clock,
-              color: "bg-amber-50 text-amber-600",
-              trend: "-8%",
-              trending: "down",
-            },
-            {
-              label: "Pending Requests",
-              value: "18",
-              icon: Clock,
-              color: "bg-purple-50 text-purple-600",
-              trend: "+5%",
-              trending: "up",
-            },
-          ].map((stat, idx) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((stat, idx) => {
             const Icon = stat.icon;
             return (
-              <div key={idx} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                <div className="flex items-start justify-between">
-                  <div className={`p-3 rounded-lg ${stat.color}`}>
+              <button
+                key={idx}
+                onClick={() => router.push(stat.href)}
+                className={`group text-left bg-white rounded-2xl border ${stat.borderColor} shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all p-6 cursor-pointer`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`p-3 rounded-xl ${stat.color}`}>
                     <Icon className="w-6 h-6" />
                   </div>
-                  <div
-                    className={`flex items-center gap-1 text-xs font-medium ${
-                      stat.trending === "up" ? "text-green-600" : "text-red-500"
-                    }`}
-                  >
-                    {stat.trend}
-                    {stat.trending === "up" ? (
-                      <ArrowUpRight className="w-3 h-3" />
-                    ) : (
-                      <ArrowDownRight className="w-3 h-3" />
-                    )}
-                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 transition-colors" />
                 </div>
-                <h3 className="mt-4 text-2xl font-bold text-gray-900">{stat.value}</h3>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-              </div>
+                <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
+                <h3 className="text-3xl font-bold text-gray-900 mt-2">
+                  {loadingStats ? (
+                    <span className="text-lg text-gray-400">Loading...</span>
+                  ) : (
+                    stat.value.toLocaleString()
+                  )}
+                </h3>
+              </button>
             );
           })}
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => router.push("/leave-requests/create")}
+            className="group bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+          >
+            <Calendar className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
+            <h3 className="font-bold text-lg">Create Leave Request</h3>
+            <p className="text-blue-100 text-sm mt-1">Submit leave on behalf</p>
+          </button>
+          <button
+            onClick={() => router.push("/payroll")}
+            className="group bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+          >
+            <FileText className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
+            <h3 className="font-bold text-lg">Manage Payroll</h3>
+            <p className="text-green-100 text-sm mt-1">Generate and track runs</p>
+          </button>
+          <button
+            onClick={() => router.push("/employees")}
+            className="group bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+          >
+            <Users className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
+            <h3 className="font-bold text-lg">View Employees</h3>
+            <p className="text-purple-100 text-sm mt-1">Manage team members</p>
+          </button>
+        </div>
+
         {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
+              <p className="text-xs text-gray-500 mt-1">Latest updates from your organization</p>
+            </div>
+            <button
+              onClick={() => router.push("/leave-requests")}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1"
+            >
+              View All <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-          <div className="p-6 space-y-4">
-            {[
-              { action: "Leave approved", employee: "Sarah Johnson", time: "2 min ago" },
-              { action: "New employee added", employee: "Michael Chen", time: "15 min ago" },
-              { action: "Payroll processed", employee: "Finance Team", time: "1 hour ago" },
-              { action: "Performance review", employee: "Emily Davis", time: "2 hours ago" },
-              { action: "Department updated", employee: "Engineering", time: "3 hours ago" },
-            ].map((activity, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between border-b border-gray-100 pb-4 last:border-0 last:pb-0"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                    <p className="text-xs text-gray-500">{activity.employee}</p>
+          <div className="divide-y divide-gray-100">
+            {loadingActivities ? (
+              <div className="px-6 py-8 text-center text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : activities.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500">No recent activity</div>
+            ) : (
+              activities.map((activity) => (
+                <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group cursor-pointer">
+                  <div className="flex items-start gap-4">
+                    <div className="text-2xl">{activity.icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="font-semibold text-gray-900 truncate">{activity.action}</p>
+                        <span className="text-xs text-gray-500 whitespace-nowrap">{formatTime(activity.timestamp)}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1 truncate">{activity.description}</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 flex-shrink-0 transition-colors" />
                   </div>
                 </div>
-                <span className="text-xs text-gray-400">{activity.time}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
+        </div>
+
+        {/* Footer Status */}
+        <div className="text-center text-xs text-gray-500">
+          <p>Dashboard updates every 30 seconds • Last updated: {new Date().toLocaleTimeString()}</p>
         </div>
       </div>
     </HRMSSidebar>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
@@ -50,6 +50,8 @@ export default function PayrollPage() {
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<"approve" | "pay" | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -146,6 +148,57 @@ export default function PayrollPage() {
     });
   }, [runs, search]);
 
+  const handleExport = () => {
+    if (!filteredRuns.length) {
+      setError("No payroll runs to export");
+      return;
+    }
+
+    const headers = ["ID", "Period Start", "Period End", "Status", "Payrolls", "Notes", "Created At"];
+    const safe = (val: unknown) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+    const rows = filteredRuns.map((r) =>
+      [r.id, r.period_start, r.period_end, r.status, r.payrolls_count ?? "", r.notes ?? "", r.created_at ?? ""]
+        .map(safe)
+        .join(","),
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `payroll-runs-${monthInput || "all"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      await api.post("/api/v1/payroll-runs/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await fetchRuns();
+    } catch (err: any) {
+      console.error(err);
+      const message = err?.response?.data?.message || "Failed to import payroll runs";
+      setError(message);
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
+
   const handleReset = () => {
     const defaultMonth = new Date().toISOString().slice(0, 7);
     setMonthInput(defaultMonth);
@@ -165,6 +218,19 @@ export default function PayrollPage() {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={handleImportClick}
+              disabled={importing}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm disabled:opacity-60"
+            >
+              {importing ? "Importing..." : "Import"}
+            </button>
+            <button
               onClick={() => fetchRuns()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
@@ -180,8 +246,15 @@ export default function PayrollPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sticky top-16 z-10">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls,.json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
           <div className="flex flex-col md:flex-row md:items-end gap-3">
-            <div className="flex-1 min-w-[180px]">
+            <div className="flex-1 min-w-44">
               <label className="text-xs font-semibold text-gray-500 uppercase">Month</label>
               <input
                 type="month"
@@ -190,7 +263,7 @@ export default function PayrollPage() {
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <div className="flex-1 min-w-[160px]">
+            <div className="flex-1 min-w-40">
               <label className="text-xs font-semibold text-gray-500 uppercase">Status</label>
               <select
                 value={statusFilter}
@@ -203,7 +276,7 @@ export default function PayrollPage() {
                 <option value="paid">Paid</option>
               </select>
             </div>
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-48">
               <label className="text-xs font-semibold text-gray-500 uppercase">Search (notes or id)</label>
               <div className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                 <Search className="w-4 h-4 text-gray-400" />
