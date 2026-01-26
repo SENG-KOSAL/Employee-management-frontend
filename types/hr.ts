@@ -12,6 +12,16 @@ export type LeaveType = {
   name: string
   code?: string | null
   is_paid: boolean
+  days_per_year?: number
+  default_days?: number
+  created_at?: string
+  updated_at?: string
+}
+export type BenefitItem = {
+  id: number
+  name: string
+  type: 'benefit' | 'deduction'   // categorize
+  amount: number                  // numeric amount
   created_at?: string
   updated_at?: string
 }
