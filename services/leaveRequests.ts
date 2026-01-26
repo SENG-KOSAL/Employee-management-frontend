@@ -9,6 +9,47 @@ export type CreateLeaveRequestInput = {
   status?: string
 }
 
+export type LeaveRequestDecision = 'approved' | 'rejected'
+export type LeaveRequestAction = 'approve' | 'reject'
+
+const toAction = (decision: LeaveRequestDecision): LeaveRequestAction =>
+  decision === 'approved' ? 'approve' : 'reject'
+
+const decideRequest = (
+  id: number,
+  decision: LeaveRequestDecision,
+  approverNotes?: string,
+  method: 'POST' | 'PATCH' | 'PUT' = 'POST'
+) =>
+  clientFetch(`/api/v1/leave-requests/${id}/decide`, {
+    method,
+    data: {
+      action: toAction(decision),
+      ...(approverNotes ? { approver_notes: approverNotes } : {}),
+    },
+  })
+
+const decide = async (id: number, decision: LeaveRequestDecision, approverNotes?: string) => {
+  try {
+    // Preferred: POST
+    return await decideRequest(id, decision, approverNotes, 'POST')
+  } catch (errPost) {
+    try {
+      // Backend may allow PATCH as well
+      return await decideRequest(id, decision, approverNotes, 'PATCH')
+    } catch (errPatch) {
+      try {
+        // Backend may allow PUT as well
+        return await decideRequest(id, decision, approverNotes, 'PUT')
+      } catch (errPut) {
+        // Backward compatibility for older backends
+        const legacyPath = decision === 'approved' ? 'approve' : 'reject'
+        return clientFetch(`/api/v1/leave-requests/${id}/${legacyPath}`, { method: 'POST' })
+      }
+    }
+  }
+}
+
 export const leaveRequestsService = {
   list: (query?: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams()
@@ -29,6 +70,7 @@ export const leaveRequestsService = {
       method: 'PUT',
       data: { status },
     }),
-  approve: (id: number) => clientFetch(`/api/v1/leave-requests/${id}/approve`, { method: 'POST' }),
-  reject: (id: number) => clientFetch(`/api/v1/leave-requests/${id}/reject`, { method: 'POST' }),
+  decide,
+  approve: (id: number, approverNotes?: string) => decide(id, 'approved', approverNotes),
+  reject: (id: number, approverNotes?: string) => decide(id, 'rejected', approverNotes),
 }

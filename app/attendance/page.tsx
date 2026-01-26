@@ -452,7 +452,7 @@ export default function AttendancePage() {
         )}
 
         {/* Clock In/Out Card */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-8 sm:p-10">
+        <div className="relative overflow-hidden bg-linear-to-br from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-8 sm:p-10">
           {/* Decorative circles */}
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl"></div>
@@ -487,7 +487,7 @@ export default function AttendancePage() {
               <button
                 onClick={handleClockIn}
                 disabled={!!todayStatus?.check_in || clocking}
-                className="group relative flex items-center justify-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-[160px]"
+                className="group relative flex items-center justify-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-40"
               >
                 <Clock className="w-6 h-6 group-hover:scale-110 transition-transform" />
                 <span>
@@ -501,7 +501,7 @@ export default function AttendancePage() {
               <button
                 onClick={handleClockOut}
                 disabled={!todayStatus?.check_in || !!todayStatus?.check_out || clocking}
-                className="group relative flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-xl shadow-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-[160px]"
+                className="group relative flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-xl shadow-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-bold text-lg min-w-40"
               >
                 <LogOutIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
                 <span>
@@ -587,6 +587,50 @@ export default function AttendancePage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Quick employee list for fast clocking */}
+          {isAdminOrHr && (
+            <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Quick Clock</h3>
+                <span className="text-xs text-gray-500">Click to clock in/out employees</span>
+              </div>
+              <div className="space-y-2 max-h-96 overflow-auto pr-1">
+                {(filteredEmployees || []).map((emp) => {
+                  const status = todayStatuses[emp.id];
+                  const canClockIn = !status?.check_in;
+                  const canClockOut = !!status?.check_in && !status?.check_out;
+                  return (
+                    <div key={emp.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-colors">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{emp.first_name} {emp.last_name}</p>
+                        <p className="text-xs text-gray-500">{emp.employee_code}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${status?.check_out ? "bg-green-50 text-green-700 border-green-100" : status?.check_in ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {status?.check_out ? "Done" : status?.check_in ? "In" : "Not started"}
+                        </span>
+                        <button
+                          onClick={() => handleRowClock("in", emp.id)}
+                          disabled={!canClockIn || adminClocking || rowClockingId === emp.id}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        >
+                          {rowClockingId === emp.id ? "..." : "Clock In"}
+                        </button>
+                        <button
+                          onClick={() => handleRowClock("out", emp.id)}
+                          disabled={!canClockOut || adminClocking || rowClockingId === emp.id}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                        >
+                          {rowClockingId === emp.id ? "..." : "Clock Out"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -688,7 +732,7 @@ export default function AttendancePage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                          <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold text-xs">
                             {firstName[0]}{lastName[0]}
                           </div>
                           <div>

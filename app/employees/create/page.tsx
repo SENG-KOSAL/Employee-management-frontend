@@ -82,6 +82,8 @@ export default function CreateEmployeePage() {
   const [availableDeductions, setAvailableDeductions] = useState<BenefitOption[]>([]);
   const [selectedBenefits, setSelectedBenefits] = useState<number[]>([]);
   const [selectedDeductions, setSelectedDeductions] = useState<number[]>([]);
+  const [benefitToAddId, setBenefitToAddId] = useState<string>("");
+  const [deductionToAddId, setDeductionToAddId] = useState<string>("");
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
   const [leaveTypesError, setLeaveTypesError] = useState("");
@@ -249,6 +251,18 @@ export default function CreateEmployeePage() {
       setSelectedBenefits((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
     } else {
       setSelectedDeductions((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+    }
+  };
+
+  const addSelection = (kind: "benefit" | "deduction", idValue: string) => {
+    const id = Number(idValue);
+    if (!Number.isFinite(id)) return;
+    if (kind === "benefit") {
+      setSelectedBenefits((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setBenefitToAddId("");
+    } else {
+      setSelectedDeductions((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setDeductionToAddId("");
     }
   };
 
@@ -766,88 +780,146 @@ export default function CreateEmployeePage() {
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-3">
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Select benefits from catalog</h3>
-                      <span className="text-xs text-gray-500">Settings → Benefits</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-800">Benefits</h3>
+                        <p className="text-xs text-gray-500">Pick items from Settings → Benefits</p>
+                      </div>
+                      <span className="text-xs text-gray-500">Selected: {selectedBenefits.length}</span>
                     </div>
-                    {availableBenefits.length === 0 ? (
-                      <p className="text-sm text-gray-500">No benefits available. Add some in Settings.</p>
+
+                    <div className="flex gap-2">
+                      <select
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={benefitToAddId}
+                        onChange={(e) => setBenefitToAddId(e.target.value)}
+                        disabled={availableBenefits.length === 0}
+                      >
+                        <option value="">Select benefit to add</option>
+                        {availableBenefits.map((b) => (
+                          <option key={b.id} value={String(b.id)}>
+                            {b.name} {b.amount ? `• ${b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => addSelection("benefit", benefitToAddId)}
+                        disabled={!benefitToAddId}
+                        className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {selectedBenefits.length === 0 ? (
+                      <p className="text-sm text-gray-500">No benefits selected.</p>
                     ) : (
                       <div className="space-y-2">
-                        {availableBenefits.map((b) => (
-                          <label
-                            key={b.id}
-                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedBenefits.includes(b.id)}
-                                onChange={() => toggleSelection("benefit", b.id)}
-                                className="w-4 h-4 text-blue-600 rounded"
-                              />
+                        {selectedBenefits.map((id) => {
+                          const b = availableBenefits.find((x) => x.id === id);
+                          return (
+                            <div key={id} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
                               <div>
-                                <p className="font-medium text-gray-900">{b.name}</p>
-                                <p className="text-xs text-gray-500">
-                                  {b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}
-                                </p>
+                                <p className="font-medium text-gray-900">{b?.name ?? `Benefit #${id}`}</p>
+                                <p className="text-xs text-gray-500">{b ? (b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`) : ""}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {b ? (
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full border ${
+                                      b.type === "percentage"
+                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                        : "bg-green-50 text-green-700 border-green-200"
+                                    }`}
+                                  >
+                                    {b.type === "percentage" ? "Percent" : "Fixed"}
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSelection("benefit", id)}
+                                  className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                >
+                                  Remove
+                                </button>
                               </div>
                             </div>
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full border ${
-                                b.type === "percentage"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-green-50 text-green-700 border-green-200"
-                              }`}
-                            >
-                              {b.type === "percentage" ? "Percent" : "Fixed"}
-                            </span>
-                          </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Select deductions from catalog</h3>
-                      <span className="text-xs text-gray-500">Settings → Benefits</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-800">Deductions</h3>
+                        <p className="text-xs text-gray-500">Pick items from Settings → Benefits</p>
+                      </div>
+                      <span className="text-xs text-gray-500">Selected: {selectedDeductions.length}</span>
                     </div>
-                    {availableDeductions.length === 0 ? (
-                      <p className="text-sm text-gray-500">No deductions available. Add some in Settings.</p>
+
+                    <div className="flex gap-2">
+                      <select
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
+                        value={deductionToAddId}
+                        onChange={(e) => setDeductionToAddId(e.target.value)}
+                        disabled={availableDeductions.length === 0}
+                      >
+                        <option value="">Select deduction to add</option>
+                        {availableDeductions.map((d) => (
+                          <option key={d.id} value={String(d.id)}>
+                            {d.name} {d.amount ? `• ${d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => addSelection("deduction", deductionToAddId)}
+                        disabled={!deductionToAddId}
+                        className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {selectedDeductions.length === 0 ? (
+                      <p className="text-sm text-gray-500">No deductions selected.</p>
                     ) : (
                       <div className="space-y-2">
-                        {availableDeductions.map((d) => (
-                          <label
-                            key={d.id}
-                            className="flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedDeductions.includes(d.id)}
-                                onChange={() => toggleSelection("deduction", d.id)}
-                                className="w-4 h-4 text-blue-600 rounded"
-                              />
+                        {selectedDeductions.map((id) => {
+                          const d = availableDeductions.find((x) => x.id === id);
+                          return (
+                            <div key={id} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
                               <div>
-                                <p className="font-medium text-gray-900">{d.name}</p>
-                                <p className="text-xs text-gray-500">
-                                  {d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}
-                                </p>
+                                <p className="font-medium text-gray-900">{d?.name ?? `Deduction #${id}`}</p>
+                                <p className="text-xs text-gray-500">{d ? (d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`) : ""}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {d ? (
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full border ${
+                                      d.type === "percentage"
+                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                        : "bg-green-50 text-green-700 border-green-200"
+                                    }`}
+                                  >
+                                    {d.type === "percentage" ? "Percent" : "Fixed"}
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSelection("deduction", id)}
+                                  className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                >
+                                  Remove
+                                </button>
                               </div>
                             </div>
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full border ${
-                                d.type === "percentage"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-green-50 text-green-700 border-green-200"
-                              }`}
-                            >
-                              {d.type === "percentage" ? "Percent" : "Fixed"}
-                            </span>
-                          </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

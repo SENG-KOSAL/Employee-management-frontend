@@ -40,7 +40,7 @@ interface EmployeeDetail {
   salary?: number;
   benefits?: any;
   deductions?: any;
-  user?: { id: number; name: string; role: string };
+  user?: { id?: number; name: string; role: string };
   employee_benefits?: CatalogItem[];
   employee_deductions?: CatalogItem[];
   leave_type_id?: number;
@@ -73,6 +73,8 @@ export default function EmployeeDetailPage() {
   const [availableDeductions, setAvailableDeductions] = useState<CatalogItem[]>([]);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState("");
   const [selectedBenefitId, setSelectedBenefitId] = useState<string>("");
   const [selectedDeductionId, setSelectedDeductionId] = useState<string>("");
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -411,6 +413,7 @@ export default function EmployeeDetailPage() {
     try {
       setAssigning(true);
       setAssignError("");
+      setRemoveError("");
       const selected = availableBenefits.find((b) => String(b.id) === String(selectedBenefitId));
       const res = await benefitsService.createBenefit({
         employee_id: Number(employee.id),
@@ -434,6 +437,10 @@ export default function EmployeeDetailPage() {
         const existing = Array.isArray(prev.employee_benefits) ? prev.employee_benefits : [];
         return { ...prev, employee_benefits: [...existing, nextItem] };
       });
+
+      if (!created?.id) {
+        await loadBenefitsAndDeductions(Number(employee.id));
+      }
     } catch (err: any) {
       console.error(err);
       setAssignError(err?.response?.data?.message || "Failed to assign benefit");
@@ -447,6 +454,7 @@ export default function EmployeeDetailPage() {
     try {
       setAssigning(true);
       setAssignError("");
+      setRemoveError("");
       const selected = availableDeductions.find((d) => String(d.id) === String(selectedDeductionId));
       const res = await benefitsService.createDeduction({
         employee_id: Number(employee.id),
@@ -470,11 +478,55 @@ export default function EmployeeDetailPage() {
         const existing = Array.isArray(prev.employee_deductions) ? prev.employee_deductions : [];
         return { ...prev, employee_deductions: [...existing, nextItem] };
       });
+
+      if (!created?.id) {
+        await loadBenefitsAndDeductions(Number(employee.id));
+      }
     } catch (err: any) {
       console.error(err);
       setAssignError(err?.response?.data?.message || "Failed to assign deduction");
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const removeAssignedBenefit = async (rowId?: number | string) => {
+    if (!employee?.id || rowId === undefined || rowId === null) return;
+    try {
+      setRemovingId(`benefit:${String(rowId)}`);
+      setRemoveError("");
+      setAssignError("");
+      await benefitsService.removeBenefit(Number(rowId));
+      setEmployee((prev) => {
+        if (!prev) return prev;
+        const existing = Array.isArray(prev.employee_benefits) ? prev.employee_benefits : [];
+        return { ...prev, employee_benefits: existing.filter((b) => String(b.id) !== String(rowId)) };
+      });
+    } catch (err: any) {
+      console.error(err);
+      setRemoveError(err?.response?.data?.message || "Failed to remove benefit");
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const removeAssignedDeduction = async (rowId?: number | string) => {
+    if (!employee?.id || rowId === undefined || rowId === null) return;
+    try {
+      setRemovingId(`deduction:${String(rowId)}`);
+      setRemoveError("");
+      setAssignError("");
+      await benefitsService.removeDeduction(Number(rowId));
+      setEmployee((prev) => {
+        if (!prev) return prev;
+        const existing = Array.isArray(prev.employee_deductions) ? prev.employee_deductions : [];
+        return { ...prev, employee_deductions: existing.filter((d) => String(d.id) !== String(rowId)) };
+      });
+    } catch (err: any) {
+      console.error(err);
+      setRemoveError(err?.response?.data?.message || "Failed to remove deduction");
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -591,7 +643,13 @@ export default function EmployeeDetailPage() {
     }
   };
 
-  const renderCatalogLine = (item: CatalogItem) => {
+  const renderCatalogLine = (
+    item: CatalogItem,
+    opts?: {
+      onRemove?: () => void;
+      removing?: boolean;
+    }
+  ) => {
     const label = item.benefit_name || item.deduction_name || item.name || "-";
     const amount = item.type === "percentage" ? `${item.amount ?? 0}%` : `$${item.amount ?? 0}`;
     const pillStyle =
@@ -600,14 +658,27 @@ export default function EmployeeDetailPage() {
         : "bg-green-50 text-green-700 border-green-200";
 
     return (
-      <div key={`${label}-${item.id ?? Math.random()}`} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-white">
+      <div key={`${String(item.id ?? label)}`} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-white">
         <div>
           <p className="font-medium text-gray-900">{label}</p>
           <p className="text-xs text-gray-500">{item.type === "percentage" ? "Percentage" : "Fixed"} • {amount}</p>
         </div>
-        <span className={`text-xs px-2 py-1 rounded-full border ${pillStyle}`}>
-          {item.type === "percentage" ? "Percent" : "Fixed"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-1 rounded-full border ${pillStyle}`}>
+            {item.type === "percentage" ? "Percent" : "Fixed"}
+          </span>
+          {opts?.onRemove ? (
+            <button
+              type="button"
+              onClick={opts.onRemove}
+              disabled={opts.removing}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Remove"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
+        </div>
       </div>
     );
   };
@@ -1041,7 +1112,10 @@ export default function EmployeeDetailPage() {
                     {assignError ? (
                       <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{assignError}</div>
                     ) : null}
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    {removeError ? (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{removeError}</div>
+                    ) : null}
+                    {/* <div className="grid gap-3 sm:grid-cols-2">
                       <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
                         <p className="text-xs font-semibold text-gray-600 uppercase">Benefits (flags)</p>
                         <div className="mt-2 space-y-1 text-sm text-gray-700">
@@ -1059,7 +1133,7 @@ export default function EmployeeDetailPage() {
                           <p>Health Insurance Deduction: {formatMoney(employee.deductions?.health_insurance_deduction)}</p>
                         </div>
                       </div>
-                    </div>
+                    </div> */}
 
                     <div className="grid gap-4 lg:grid-cols-2">
                       <div className="space-y-2">
@@ -1090,7 +1164,12 @@ export default function EmployeeDetailPage() {
                         </div>
                         {Array.isArray(employee.employee_benefits) && employee.employee_benefits.length > 0 ? (
                           <div className="space-y-2">
-                            {employee.employee_benefits.map((item) => renderCatalogLine(item))}
+                            {employee.employee_benefits.map((item) =>
+                              renderCatalogLine(item, {
+                                onRemove: () => removeAssignedBenefit(item.id),
+                                removing: removingId === `benefit:${String(item.id)}`,
+                              })
+                            )}
                           </div>
                         ) : (
                           <p className="text-sm text-gray-500">No catalog benefits assigned.</p>
@@ -1124,7 +1203,12 @@ export default function EmployeeDetailPage() {
                         </div>
                         {Array.isArray(employee.employee_deductions) && employee.employee_deductions.length > 0 ? (
                           <div className="space-y-2">
-                            {employee.employee_deductions.map((item) => renderCatalogLine(item))}
+                            {employee.employee_deductions.map((item) =>
+                              renderCatalogLine(item, {
+                                onRemove: () => removeAssignedDeduction(item.id),
+                                removing: removingId === `deduction:${String(item.id)}`,
+                              })
+                            )}
                           </div>
                         ) : (
                           <p className="text-sm text-gray-500">No catalog deductions assigned.</p>
@@ -1141,7 +1225,7 @@ export default function EmployeeDetailPage() {
                       Leave allocations are shown below. Use the form to add or change the default leave type for this employee.
                     </div>
                     <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                      <div className="flex flex-wrap gap-3 items-end">
+                      {/* <div className="flex flex-wrap gap-3 items-end">
                         <div className="min-w-40">
                           <label className="block text-xs font-semibold text-gray-700 mb-1">OT Date</label>
                           <input
@@ -1181,10 +1265,10 @@ export default function EmployeeDetailPage() {
                         >
                           {overtimeSaving ? "Saving..." : "Add OT"}
                         </button>
-                      </div>
+                      </div> */}
                       {overtimeError && <p className="text-sm text-red-600">{overtimeError}</p>}
                       {overtimeSuccess && <p className="text-sm text-green-600">{overtimeSuccess}</p>}
-                      <div className="pt-2 space-y-2">
+                      {/* <div className="pt-2 space-y-2">
                         <p className="text-xs font-semibold text-gray-600 uppercase">Overtime Records</p>
                         {overtimeLoading && <p className="text-sm text-gray-500">Loading...</p>}
                         {!overtimeLoading && (!overtimes || overtimes.length === 0) ? (
@@ -1203,7 +1287,7 @@ export default function EmployeeDetailPage() {
                             ))}
                           </div>
                         ) : null}
-                      </div>
+                      </div> */}
                     </div>
                     <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
                       <div className="flex flex-wrap gap-3 items-end">

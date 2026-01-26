@@ -40,7 +40,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { clearMeCache, fetchMe, getCachedMe } from "@/lib/meCache"
 import api from "@/services/api"
 import { getToken, removeToken } from "@/utils/auth"
 import { useRouter } from "next/navigation"
@@ -123,7 +122,7 @@ const navigation = {
       title: "Payroll",
       icon: Wallet,
       items: [
-        { title: "Salary", href: "/salary" },
+        { title: "Salary", href: "/salaries" },
         { title: "Payslips", href: "/payslips" },
         { title: "Payroll", href: "/payroll" },
       ],
@@ -282,20 +281,14 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
     const token = getToken()
     if (!token) return
 
-    const cached = getCachedMe()
-    if (cached) {
-      const name = cached.employee?.full_name || cached.name || ""
-      setDisplayName(name)
-      setMe(cached)
-      return
-    }
-
     const loadMe = async () => {
       try {
-        const data = await fetchMe()
-        const name = data?.employee?.full_name || data?.name || ""
+        const res = await api.get("/api/v1/me")
+        const data: any = res.data?.data ?? res.data
+        const me: MePayload = data ?? {}
+        const name = me.employee?.full_name || me.name || ""
         setDisplayName(name)
-        setMe(data)
+        setMe(me)
       } catch {
         // ignore; we'll just show initials placeholder
       }
@@ -311,7 +304,6 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
       // ignore network/API errors; still clear local token
     } finally {
       removeToken()
-      clearMeCache()
       router.push("/auth/login")
     }
   }
