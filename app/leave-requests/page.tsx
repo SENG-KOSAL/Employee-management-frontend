@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
+import { leaveRequestsService } from "@/services/leaveRequests";
 import { getToken } from "@/utils/auth";
-import { RefreshCw, Search, Plus, Eye, FileText } from "lucide-react";
+import { RefreshCw, Search, Plus, Eye, FileText, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 
 interface LeaveRequestRow {
   id: number;
@@ -50,6 +51,8 @@ export default function LeaveRequestsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [typesMap, setTypesMap] = useState<Record<number, { name?: string; code?: string; default_days?: number; days_per_year?: number }>>({});
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -93,6 +96,64 @@ export default function LeaveRequestsPage() {
     }
   };
 
+  const handleStatus = async (id: number, nextStatus: "approved" | "rejected") => {
+    try {
+      setUpdatingId(id);
+      setError("");
+      try {
+        if (nextStatus === "approved") {
+          await leaveRequestsService.approve(id);
+        } else {
+          await leaveRequestsService.reject(id);
+        }
+      } catch {
+        await leaveRequestsService.updateStatus(id, nextStatus);
+      }
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: nextStatus } : r)));
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || "Failed to update status");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleApproveAllPending = async () => {
+    const pendingIds = filtered
+      .filter((r) => (r.status || "pending").toLowerCase() === "pending")
+      .map((r) => r.id);
+    if (pendingIds.length === 0) return;
+
+    const ok = window.confirm(`Approve all pending requests? (${pendingIds.length})`);
+    if (!ok) return;
+
+    try {
+      setBulkApproving(true);
+      setError("");
+      const results = await Promise.allSettled(
+        pendingIds.map(async (id) => {
+          try {
+            await leaveRequestsService.approve(id);
+          } catch {
+            await leaveRequestsService.updateStatus(id, "approved");
+          }
+          return id;
+        })
+      );
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      setRows((prev) => prev.map((r) => (pendingIds.includes(r.id) ? { ...r, status: "approved" } : r)));
+      if (failed > 0) {
+        setError(`Approved ${succeeded}, failed ${failed}. Please retry failed items.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || "Failed to approve all pending requests");
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return rows.filter((r) => {
@@ -100,9 +161,15 @@ export default function LeaveRequestsPage() {
       const code = (r.employee?.employee_code || "").toLowerCase();
       const typeName = (r.leave_type?.name || r.leave_type?.code || "").toLowerCase();
       const matches = term ? name.includes(term) || code.includes(term) || typeName.includes(term) : true;
-      return matches;
+      const matchesStatus = status ? (r.status || "pending").toLowerCase() === status.toLowerCase() : true;
+      return matches && matchesStatus;
     });
   }, [rows, search]);
+
+  const pendingCount = useMemo(
+    () => filtered.filter((r) => (r.status || "pending").toLowerCase() === "pending").length,
+    [filtered]
+  );
 
   return (
     <HRMSSidebar>
@@ -119,6 +186,21 @@ export default function LeaveRequestsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <Link
+              href="/leave-requests/manager"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+              title="Approval page"
+            >
+              <ShieldCheck className="w-4 h-4" /> Approvals
+            </Link>
+            <button
+              onClick={handleApproveAllPending}
+              disabled={bulkApproving || pendingCount === 0}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Approve all pending in current list"
+            >
+              <CheckCircle2 className="w-4 h-4" /> {bulkApproving ? "Approving..." : `Approve All (${pendingCount})`}
             </button>
             <button
               onClick={() => router.push("/leave-requests/create")}
@@ -177,9 +259,9 @@ export default function LeaveRequestsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No leave requests</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No leave requests</td></tr>
                 ) : (
                   filtered.map((r) => (
                     <tr key={r.id} className="hover:bg-gray-50">
@@ -207,6 +289,28 @@ export default function LeaveRequestsPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-700 truncate max-w-xs" title={r.reason || ""}>{r.reason || "-"}</td>
                       <td className="px-4 py-3 text-right space-x-2">
+                        {(r.status || "pending").toLowerCase() === "pending" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleStatus(r.id, "approved")}
+                              disabled={updatingId === r.id}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Approve"
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> {updatingId === r.id ? "..." : "Approve"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStatus(r.id, "rejected")}
+                              disabled={updatingId === r.id}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Reject"
+                            >
+                              <XCircle className="w-4 h-4" /> {updatingId === r.id ? "..." : "Reject"}
+                            </button>
+                          </>
+                        ) : null}
                         <Link
                           href={`/leave-requests/${r.id}`}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"

@@ -29,6 +29,21 @@ interface PayrollItem {
   status: string;
   paid_at?: string | null;
   notes?: string | null;
+  adjustments?: Adjustment[];
+  audit_logs?: AuditLog[];
+}
+
+interface Adjustment {
+  id: number;
+  amount: number | string;
+  note?: string | null;
+  created_at?: string;
+}
+
+interface AuditLog {
+  id: number;
+  message?: string;
+  created_at?: string;
 }
 
 interface PayrollRunDetail {
@@ -73,6 +88,19 @@ export default function PayrollRunDetailPage() {
   const [actionType, setActionType] = useState<"approve" | "pay" | null>(null);
   const [search, setSearch] = useState("");
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
+  const [editPayrollId, setEditPayrollId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    base_pay: "",
+    overtime_pay: "",
+    benefits_total: "",
+    deductions_total: "",
+    notes: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [adjustPayrollId, setAdjustPayrollId] = useState<number | null>(null);
+  const [adjustForm, setAdjustForm] = useState({ amount: "", note: "" });
+  const [savingAdjust, setSavingAdjust] = useState(false);
+  const [adjustments, setAdjustments] = useState<Record<number, Adjustment[]>>({});
 
   const issueFlags = (p: PayrollItem) => {
     const flags: string[] = [];
@@ -250,6 +278,72 @@ export default function PayrollRunDetailPage() {
     router.push(`/payroll/${runId}/payslip/print-all?auto=1`);
   };
 
+  const startEdit = (p: PayrollItem) => {
+    setError("");
+    setEditPayrollId(p.id);
+    setAdjustPayrollId(null);
+    setEditForm({
+      base_pay: p.base_pay,
+      overtime_pay: p.overtime_pay,
+      benefits_total: p.benefits_total,
+      deductions_total: p.deductions_total,
+      notes: p.notes || "",
+    });
+  };
+
+  const submitEdit = async () => {
+    if (!editPayrollId) return;
+    try {
+      setSavingEdit(true);
+      setError("");
+      await api.patch(`/api/v1/payrolls/${editPayrollId}`, editForm);
+      await fetchDetail();
+      setEditPayrollId(null);
+    } catch (err: any) {
+      console.error(err);
+      const message = err?.response?.data?.message || "Failed to update payroll line";
+      setError(message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const loadAdjustments = async (payrollId: number) => {
+    try {
+      const res = await api.get(`/api/v1/payrolls/${payrollId}/adjustments`);
+      const list = res.data?.data ?? res.data ?? [];
+      setAdjustments((prev) => ({ ...prev, [payrollId]: Array.isArray(list) ? list : [] }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const startAdjust = async (p: PayrollItem) => {
+    setError("");
+    setAdjustPayrollId(p.id);
+    setEditPayrollId(null);
+    setAdjustForm({ amount: "", note: "" });
+    await loadAdjustments(p.id);
+  };
+
+  const submitAdjust = async () => {
+    if (!adjustPayrollId) return;
+    try {
+      setSavingAdjust(true);
+      setError("");
+      await api.post(`/api/v1/payrolls/${adjustPayrollId}/adjustments`, adjustForm);
+      await loadAdjustments(adjustPayrollId);
+      await fetchDetail();
+      setAdjustForm({ amount: "", note: "" });
+    } catch (err: any) {
+      console.error(err);
+      const message = err?.response?.data?.message || "Failed to add adjustment";
+      setError(message);
+    } finally {
+      setSavingAdjust(false);
+    }
+  };
+
   return (
     <HRMSSidebar>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -422,7 +516,7 @@ export default function PayrollRunDetailPage() {
                       <th className="px-4 py-3">Gross</th>
                       <th className="px-4 py-3">Net</th>
                       <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Payslip</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -461,12 +555,163 @@ export default function PayrollRunDetailPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => router.push(`/payroll/${runId}/payslip/${p.id}`)}
-                              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-                            >
-                              View payslip
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => router.push(`/payroll/${runId}/payslip/${p.id}`)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                              >
+                                View payslip
+                              </button>
+                              {data.status === "draft" && (
+                                <button
+                                  onClick={() => startEdit(p)}
+                                  className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              {(data.status === "approved" || data.status === "paid") && (
+                                <button
+                                  onClick={() => startAdjust(p)}
+                                  className="text-xs px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                >
+                                  Adjust
+                                </button>
+                              )}
+                            </div>
+                            {(editPayrollId === p.id || adjustPayrollId === p.id) && (
+                              <div className="mt-3 text-left bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                                {editPayrollId === p.id && (
+                                  <div className="space-y-2">
+                                    <div className="text-xs font-semibold text-gray-700">Edit payroll line (draft only)</div>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Base</span>
+                                        <input
+                                          value={editForm.base_pay}
+                                          onChange={(e) => setEditForm((prev) => ({ ...prev, base_pay: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="number"
+                                          step="0.01"
+                                        />
+                                      </label>
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Overtime</span>
+                                        <input
+                                          value={editForm.overtime_pay}
+                                          onChange={(e) => setEditForm((prev) => ({ ...prev, overtime_pay: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="number"
+                                          step="0.01"
+                                        />
+                                      </label>
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Benefits</span>
+                                        <input
+                                          value={editForm.benefits_total}
+                                          onChange={(e) => setEditForm((prev) => ({ ...prev, benefits_total: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="number"
+                                          step="0.01"
+                                        />
+                                      </label>
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Deductions</span>
+                                        <input
+                                          value={editForm.deductions_total}
+                                          onChange={(e) => setEditForm((prev) => ({ ...prev, deductions_total: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="number"
+                                          step="0.01"
+                                        />
+                                      </label>
+                                    </div>
+                                    <label className="flex flex-col gap-1 text-sm">
+                                      <span className="text-xs text-gray-500">Notes</span>
+                                      <textarea
+                                        value={editForm.notes}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                        className="rounded border border-gray-200 px-2 py-1"
+                                        rows={2}
+                                      />
+                                    </label>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <button
+                                        onClick={submitEdit}
+                                        disabled={savingEdit}
+                                        className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                      >
+                                        {savingEdit ? "Saving..." : "Save changes"}
+                                      </button>
+                                      <button
+                                        onClick={() => setEditPayrollId(null)}
+                                        className="px-3 py-1.5 rounded border border-gray-200 text-gray-700 hover:bg-gray-100"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {adjustPayrollId === p.id && (
+                                  <div className="space-y-2">
+                                    <div className="text-xs font-semibold text-gray-700">Add adjustment (approved/paid)</div>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Amount (use negative for deductions)</span>
+                                        <input
+                                          value={adjustForm.amount}
+                                          onChange={(e) => setAdjustForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="number"
+                                          step="0.01"
+                                        />
+                                      </label>
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Note</span>
+                                        <input
+                                          value={adjustForm.note}
+                                          onChange={(e) => setAdjustForm((prev) => ({ ...prev, note: e.target.value }))}
+                                          className="rounded border border-gray-200 px-2 py-1"
+                                          type="text"
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <button
+                                        onClick={submitAdjust}
+                                        disabled={savingAdjust}
+                                        className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                      >
+                                        {savingAdjust ? "Saving..." : "Save adjustment"}
+                                      </button>
+                                      <button
+                                        onClick={() => setAdjustPayrollId(null)}
+                                        className="px-3 py-1.5 rounded border border-gray-200 text-gray-700 hover:bg-gray-100"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                    <div className="text-xs text-gray-600">Adjustments on approved/paid lines are logged and totals are recalculated.</div>
+                                    <div className="text-xs text-gray-800 space-y-1">
+                                      <div className="font-semibold text-gray-900">Past adjustments</div>
+                                      {(adjustments[p.id] || []).length === 0 ? (
+                                        <p className="text-gray-500">No adjustments yet.</p>
+                                      ) : (
+                                        <ul className="space-y-1">
+                                          {(adjustments[p.id] || []).map((adj) => (
+                                            <li key={adj.id} className="flex items-center justify-between">
+                                              <span>{adj.note || "Adjustment"}</span>
+                                              <span className="font-mono">{currency(adj.amount)}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))
