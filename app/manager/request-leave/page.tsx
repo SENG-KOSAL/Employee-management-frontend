@@ -2,18 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { EmployeeSidebar } from "@/components/layout/EmployeeSidebar";
+
+import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { leaveRequestsService } from "@/services/leaveRequests";
 import { leaveTypesService } from "@/services/leaveTypes";
 import api from "@/services/api";
 import { getMe, getToken, saveMe } from "@/utils/auth";
 import { CalendarClock, Send, Loader2 } from "lucide-react";
-
-interface LeaveType {
-  id: number;
-  name: string;
-  is_paid?: boolean;
-}
 
 type MePayload = {
   employee?: {
@@ -21,7 +16,13 @@ type MePayload = {
   } | null;
 } | null;
 
-export default function EmployeeLeaveRequestPage() {
+interface LeaveType {
+  id: number;
+  name: string;
+  is_paid?: boolean;
+}
+
+export default function ManagerRequestLeavePage() {
   const router = useRouter();
   const [user, setUser] = useState<MePayload>(() => getMe<MePayload>() || null);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -41,11 +42,12 @@ export default function EmployeeLeaveRequestPage() {
     }
     loadUser();
     loadLeaveTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const loadUser = async () => {
     try {
-      const cached = getMe();
+      const cached = getMe<MePayload>();
       if (cached) {
         setUser(cached);
         return;
@@ -91,8 +93,10 @@ export default function EmployeeLeaveRequestPage() {
       setError("Leave type, start date, and end date are required");
       return;
     }
+
     setError("");
     setSuccess("");
+
     try {
       setSubmitting(true);
       await leaveRequestsService.create({
@@ -103,6 +107,7 @@ export default function EmployeeLeaveRequestPage() {
         reason: reason || undefined,
         status: "pending",
       });
+
       setSuccess("Leave request submitted");
       setLeaveTypeId("");
       setStartDate("");
@@ -122,7 +127,7 @@ export default function EmployeeLeaveRequestPage() {
   };
 
   return (
-    <EmployeeSidebar>
+    <HRMSSidebar>
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-50 text-blue-700 rounded-lg">
@@ -134,8 +139,12 @@ export default function EmployeeLeaveRequestPage() {
           </div>
         </div>
 
-        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
-        {success && <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{success}</div>}
+        {error ? (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
+        ) : null}
+        {success ? (
+          <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{success}</div>
+        ) : null}
 
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -201,6 +210,6 @@ export default function EmployeeLeaveRequestPage() {
           </form>
         </div>
       </div>
-    </EmployeeSidebar>
+    </HRMSSidebar>
   );
 }

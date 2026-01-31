@@ -10,7 +10,41 @@ export interface DashboardStats {
   departmentCount: number;
 }
 
-export function useDashboardStats(refreshInterval = 30000) {
+const STORAGE_KEY = "hrms.dashboardStats.v1";
+
+type StoredStats = {
+  ts: number;
+  value: DashboardStats;
+};
+
+const readStored = (): StoredStats | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const rec = parsed as Record<string, unknown>;
+    if (typeof rec.ts !== "number" || !rec.value || typeof rec.value !== "object") return null;
+    return { ts: rec.ts, value: rec.value as DashboardStats };
+  } catch {
+    return null;
+  }
+};
+
+const writeStored = (value: DashboardStats) => {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: StoredStats = { ts: Date.now(), value };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+};
+
+const isFresh = (ts: number, ttlMs: number) => Date.now() - ts < ttlMs;
+
+export function useDashboardStats(refreshInterval = 0, ttlMs = 5 * 60 * 1000) {
   const [stats, setStats] = useState<DashboardStats>({
     totalEmployees: 0,
     presentToday: 0,
@@ -76,6 +110,14 @@ export function useDashboardStats(refreshInterval = 30000) {
         totalPayroll: 0,
         departmentCount,
       });
+      writeStored({
+        totalEmployees,
+        presentToday,
+        onLeave: onLeaveToday,
+        pendingRequests,
+        totalPayroll: 0,
+        departmentCount,
+      });
       setLoading(false);
     } catch (err) {
       console.error("Failed to fetch dashboard stats:", err);
@@ -85,10 +127,19 @@ export function useDashboardStats(refreshInterval = 30000) {
   }, []);
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, refreshInterval);
-    return () => clearInterval(interval);
-  }, [fetchStats, refreshInterval]);
+    const stored = readStored();
+    if (stored && isFresh(stored.ts, ttlMs)) {
+      setStats(stored.value);
+      setLoading(false);
+    } else {
+      fetchStats();
+    }
+
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchStats, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchStats, refreshInterval, ttlMs]);
 
   return { stats, loading, error, refetch: fetchStats };
 }
