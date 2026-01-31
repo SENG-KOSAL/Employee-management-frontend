@@ -3,7 +3,7 @@
 import { useState } from "react";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
-import { saveToken } from "@/utils/auth";
+import { saveMe, saveToken } from "@/utils/auth";
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
 import { isAxiosError } from "axios";
 import Link from "next/link";
@@ -27,7 +27,16 @@ export default function LoginPage() {
       if (res.data.token) {
         saveToken(res.data.token);
         setMessage("Login successful! Redirecting...");
-        setTimeout(() => router.push("/dashboard"), 500);
+        try {
+          const meRes = await api.get("/api/v1/me");
+          const me = meRes.data?.data ?? meRes.data;
+          saveMe(me);
+          const role = String(me?.employee?.role || me?.role || "").toLowerCase();
+          const target = role === "employee" ? "/employee" : role === "manager" ? "/manager" : "/dashboard";
+          setTimeout(() => router.push(target), 300);
+        } catch {
+          setTimeout(() => router.push("/dashboard"), 300);
+        }
       }
       //not working yet
       // if(res.data.token){

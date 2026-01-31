@@ -2,10 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, LogOut as LogOutIcon, Calendar } from "lucide-react";
-import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
+import { Clock, LogOut as LogOutIcon } from "lucide-react";
+import { EmployeeSidebar } from "@/components/layout/EmployeeSidebar";
 import api from "@/services/api";
-import { getToken } from "@/utils/auth";
+import { getMe, getToken, saveMe } from "@/utils/auth";
+
+type MePayload = {
+  employee?: {
+    id?: number;
+  } | null;
+} | null;
 
 interface AttendanceRecord {
   id: number;
@@ -20,7 +26,7 @@ interface AttendanceRecord {
 
 export default function EmployeeAttendancePage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<MePayload>(() => getMe<MePayload>() || null);
   const [todayStatus, setTodayStatus] = useState<AttendanceRecord | null>(null);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,13 +57,15 @@ export default function EmployeeAttendancePage() {
 
   const loadUser = async () => {
     try {
-      const res = await api.get("/api/v1/me");
-      const data = res.data?.data ?? res.data;
-      if (data?.role !== "employee") {
-        router.push("/attendance");
+      const cached = getMe();
+      if (cached) {
+        setUser(cached);
         return;
       }
+      const res = await api.get("/api/v1/me");
+      const data = res.data?.data ?? res.data;
       setUser(data);
+      saveMe(data);
     } catch (err) {
       console.error(err);
       router.push("/auth/login");
@@ -124,16 +132,20 @@ export default function EmployeeAttendancePage() {
       setSuccess(type === "in" ? "Clocked in" : "Clocked out");
       setTimeout(() => setSuccess(""), 2000);
       fetchAttendances();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err?.response?.data?.message || `Failed to clock ${type}`);
+      const message =
+        typeof err === "object" && err && "response" in err
+          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message as string | undefined)
+          : undefined;
+      setError(message || `Failed to clock ${type}`);
     } finally {
       setClocking(false);
     }
   };
 
   return (
-    <HRMSSidebar>
+    <EmployeeSidebar>
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-gray-900">My Attendance</h1>
@@ -266,6 +278,6 @@ export default function EmployeeAttendancePage() {
           </div>
         </div>
       </div>
-    </HRMSSidebar>
+    </EmployeeSidebar>
   );
 }
