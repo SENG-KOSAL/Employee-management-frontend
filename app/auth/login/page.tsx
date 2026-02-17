@@ -3,18 +3,31 @@
 import { useState } from "react";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
-import { saveMe, saveToken } from "@/utils/auth";
+import { removeMe, saveMe, saveToken } from "@/utils/auth";
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
-import { isAxiosError } from "axios";
-import Link from "next/link";
+import axios, { isAxiosError } from "axios";
+import { clearMeCache, fetchMe } from "@/lib/meCache";
 export default function LoginPage() {
-  const [login, setLogin] = useState("");
-  const [name , setName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+
+  const isTenantSubdomain = () => {
+    if (typeof window === "undefined") return false;
+    const host = window.location.hostname;
+    if (!host || host === "localhost" || host === "127.0.0.1") return false;
+
+    const parts = host.split(".").filter(Boolean);
+    if (parts.length < 2) return false;
+
+    const sub = parts[0]?.toLowerCase();
+    // Treat platform hosts like platform.local / app.local as non-tenant if you use them.
+    if (!sub || sub === "platform" || sub === "app" || sub === "www") return false;
+    return true;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,17 +35,37 @@ export default function LoginPage() {
     setMessage("");
 
     try {
-      const res = await api.post("/api/v1/login", { name, password });
+      // Use same-origin login proxy to avoid CORS / subdomain issues.
+      const res = await axios.post("/api/auth/login", { username, password });
 
-      if (res.data.token) {
-        saveToken(res.data.token);
+      // Support multiple common backend shapes:
+      // - { token: "..." }
+      // - { data: { token: "..." } }
+      const token = res?.data?.token ?? res?.data?.data?.token ?? res?.data?.access_token;
+      const loginUser = res?.data?.user ?? res?.data?.data?.user;
+
+      if (token) {
+        // Ensure we start fresh (avoid stale role + stale support-mode state)
+        localStorage.removeItem("active_company_id");
+        localStorage.removeItem("active_company_name");
+        removeMe();
+        clearMeCache();
+
+        saveToken(token);
         setMessage("Login successful! Redirecting...");
         try {
-          const meRes = await api.get("/api/v1/me");
-          const me = meRes.data?.data ?? meRes.data;
-          saveMe(me);
-          const role = String(me?.employee?.role || me?.role || "").toLowerCase();
-          const target = role === "employee" ? "/employee" : role === "manager" ? "/manager" : "/dashboard";
+          // Prefer backend login response user object (some backends don't support /me).
+          const me = (loginUser && typeof loginUser === "object") ? loginUser : await fetchMe(true);
+          if (me) saveMe(me);
+          const role = String((me as any)?.employee?.role || (me as any)?.role || "").toLowerCase();
+          const target =
+            role === "super_admin"
+              ? (isTenantSubdomain() ? "/dashboard" : "/super-admin")
+              : role === "employee"
+                ? "/employee"
+                : role === "manager"
+                  ? "/manager"
+                  : "/dashboard";
           setTimeout(() => router.push(target), 300);
         } catch {
           setTimeout(() => router.push("/dashboard"), 300);
@@ -46,7 +79,44 @@ export default function LoginPage() {
       // }
     } catch (err: unknown) {
       if (isAxiosError(err)) {
-        setMessage(err.response?.data?.message || "Invalid credentials. Please try again.");
+        const data = err.response?.data as unknown;
+        const fallback = "Wrong username or password.";
+
+        const status = err.response?.status;
+        const looksLikeInvalidCredentials = (msg: string) => {
+          const m = msg.toLowerCase();
+          return (
+            m.includes("invalid credentials") ||
+            m.includes("unauthorized") ||
+            m.includes("wrong password") ||
+            m.includes("incorrect")
+          );
+        };
+
+        if (data && typeof data === "object") {
+          const rec = data as Record<string, unknown>;
+          const msg = typeof rec.message === "string" ? rec.message : null;
+          const errors = rec.errors;
+          if (errors && typeof errors === "object") {
+            const errRec = errors as Record<string, unknown>;
+            const firstKey = Object.keys(errRec)[0];
+            const firstVal = firstKey ? errRec[firstKey] : null;
+            if (Array.isArray(firstVal) && typeof firstVal[0] === "string") {
+              setMessage(firstVal[0]);
+              return;
+            }
+          }
+
+          // Common backend pattern: 401/422 with a generic message.
+          if ((status === 401 || status === 422) && msg && looksLikeInvalidCredentials(msg)) {
+            setMessage(fallback);
+            return;
+          }
+
+          setMessage(msg ?? fallback);
+        } else {
+          setMessage(fallback);
+        }
       } else {
         setMessage("An unexpected error occurred. Please try again.");
       }
@@ -75,7 +145,7 @@ export default function LoginPage() {
               {/* Login Input */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  name
+                  Username
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -83,10 +153,10 @@ export default function LoginPage() {
                   </div>
                   <input
                     type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition duration-200"
-                    placeholder="enter username"
+                    placeholder="Enter username"
                     required
                     disabled={isLoading}
                   />

@@ -143,7 +143,7 @@ export default function UsersPermissionsPage() {
 
   return (
     <HRMSSidebar>
-      <RoleGate allowRoles={["admin"]}>
+      <RoleGate allowRoles={["admin", "super_admin", "developer"]}>
         <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -155,7 +155,7 @@ export default function UsersPermissionsPage() {
           </div>
           <div className="flex gap-2">
             <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs text-gray-500">Admin-only page</span>
+              <span className="text-xs text-gray-500">Admin / Super Admin page</span>
             </div>
           </div>
         </div>

@@ -42,9 +42,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import api from "@/services/api"
 import { getMe, getToken, removeMe, removeToken } from "@/utils/auth"
 import { useRouter } from "next/navigation"
+import TenantSwitcher from "@/components/admin/TenantSwitcher"
+import { useActiveCompany } from "@/context/ActiveCompanyContext"
 
 type MePayload = {
   name?: string
+  company?: {
+    name?: string | null
+  } | null
   employee?: {
     full_name?: string | null
     id?: number
@@ -314,6 +319,7 @@ function SidebarUserFooter({
 export function HRMSSidebar({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { activeCompany, isSupportMode } = useActiveCompany()
   const [displayName, setDisplayName] = useState<string>("")
   const [me, setMe] = useState<MePayload | null>(null)
   // HRMSSidebar is for admin/manager UI. Employee UI uses EmployeeSidebar.
@@ -328,17 +334,42 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
   }, [displayName])
 
   const userRole = useMemo(() => (me?.employee?.role ?? me?.role ?? null), [me?.employee?.role, me?.role])
-  const isManager = (userRole || "").toLowerCase() === "manager"
-  const isAdmin = (userRole || "").toLowerCase() === "admin"
+  const companyName = useMemo(() => {
+    const supportName = activeCompany?.name?.trim()
+    if (supportName) return supportName
+    const meCompany = me?.company?.name?.trim()
+    if (meCompany) return meCompany
+    return "Company"
+  }, [activeCompany?.name, me?.company?.name])
+  const normalizedRole = (userRole || "").toLowerCase()
+  const isManager = normalizedRole === "manager"
+  const isSuperAdmin =
+    normalizedRole === "super_admin" ||
+    normalizedRole === "super-admin" ||
+    normalizedRole === "superadmin" ||
+    normalizedRole === "developer"
+  const isAdmin = normalizedRole === "admin" || isSuperAdmin
 
   const navToUse = useMemo(() => {
     if (isManager) return managerNavigation
     if (isAdmin) return navigation
-    return {
+    const base = {
       ...navigation,
       system: navigation.system.filter((item) => item.href !== "/users-permissions"),
     }
-  }, [isAdmin, isManager])
+
+    if (isSuperAdmin) {
+      return {
+        ...base,
+        system: [
+          { title: "Developer Console", icon: ShieldCheck, href: "/super-admin" },
+          ...base.system,
+        ],
+      }
+    }
+
+    return base
+  }, [isAdmin, isManager, isSuperAdmin])
 
   useEffect(() => {
     if (!isManager) return
@@ -395,8 +426,8 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
               HR
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-              <span className="text-sm font-semibold text-gray-900">HRMS Pro</span>
-              <span className="text-xs text-gray-500">Management System</span>
+              <span className="text-sm font-semibold text-gray-900 truncate">{companyName}</span>
+              <span className="text-xs text-gray-500">{isSupportMode ? "Support Mode" : "Management System"}</span>
             </div>
           </div>
         </SidebarHeader>
@@ -421,9 +452,11 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-gray-200 bg-white/80 backdrop-blur-md px-6">
           <SidebarTrigger className="md:hidden" />
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
+            <h1 className="text-xl font-bold text-gray-800">{companyName}</h1>
             <p className="text-xs text-gray-500 hidden sm:block">Overview of your organization</p>
           </div>
+
+          {isSuperAdmin ? <TenantSwitcher /> : null}
           
           <div className="flex items-center gap-2">
               <div className="text-sm text-right hidden sm:block">
