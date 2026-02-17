@@ -18,6 +18,12 @@ function getRole(me: MePayload | null): string | null {
   return role ? String(role).toLowerCase() : null
 }
 
+function isSuperRole(role: string | null): boolean {
+  if (!role) return false
+  const normalized = String(role).toLowerCase()
+  return normalized === "super_admin" || normalized === "super-admin" || normalized === "superadmin" || normalized === "developer"
+}
+
 export function RoleGate({
   allowRoles,
   children,
@@ -47,6 +53,7 @@ export function RoleGate({
 
   const allowed = useMemo(() => {
     if (!role) return false
+    if (isSuperRole(role)) return true
     return allowRoles.map((r) => r.toLowerCase()).includes(role)
   }, [allowRoles, role])
 

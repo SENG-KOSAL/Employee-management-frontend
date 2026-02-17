@@ -21,6 +21,7 @@ interface PayrollDetail {
   id: number;
   period_start: string;
   period_end: string;
+  paid_at?: string | null;
   status: string;
   base_pay: string;
   overtime_pay: string;

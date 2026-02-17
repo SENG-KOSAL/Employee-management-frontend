@@ -91,6 +91,8 @@ export default function EmployeeDetailPage() {
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [limitedView, setLimitedView] = useState(false);
+  const [limitedViewMessage, setLimitedViewMessage] = useState<string>("");
   const [allocations, setAllocations] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("personal");
   const [availableBenefits, setAvailableBenefits] = useState<CatalogItem[]>([]);
@@ -439,6 +441,8 @@ export default function EmployeeDetailPage() {
   const fetchEmployee = async (empId: string | number) => {
     try {
       setLoading(true);
+      setLimitedView(false);
+      setLimitedViewMessage("");
       const empRes = await api.get(`/api/v1/employees/${empId}`);
       const empData = empRes.data.data || empRes.data;
       setEmployee(empData);
@@ -460,7 +464,33 @@ export default function EmployeeDetailPage() {
       setError("");
     } catch (err) {
       console.error(err);
-      setError("Failed to load employee details");
+      const status = (err as any)?.response?.status as number | undefined;
+      const message = (err as any)?.response?.data?.message as string | undefined;
+
+      // If backend forbids /employees/:id for some roles (e.g. company_admin),
+      // fall back to loading the employee from the list endpoint and show a read-only view.
+      if (status === 403) {
+        try {
+          const listRes = await api.get("/api/v1/employees?per_page=500");
+          const listData = (listRes as any)?.data?.data ?? (listRes as any)?.data;
+          const rows = Array.isArray(listData) ? listData : Array.isArray(listData?.data) ? listData.data : [];
+          const found = rows.find((e: any) => String(e?.id) === String(empId));
+          if (found) {
+            setEmployee(found);
+            setActiveTab("personal");
+            setLimitedView(true);
+            setLimitedViewMessage(
+              message || "Limited view: you don't have permission to access the full employee profile."
+            );
+            setError("");
+            return;
+          }
+        } catch (fallbackErr) {
+          console.error(fallbackErr);
+        }
+      }
+
+      setError(message || (status === 403 ? "You don't have permission to view this employee." : "Failed to load employee details"));
     } finally {
       setLoading(false);
     }
@@ -985,26 +1015,37 @@ export default function EmployeeDetailPage() {
 
         {employee && (
           <div className="space-y-6">
+            {limitedView && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
+                {limitedViewMessage || "Limited view: some employee details are not available for your role."}
+              </div>
+            )}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <EmployeePhotoUploader
-                    employeeId={employee.id}
-                    photoUrl={extractPhotoUrl(employee)}
-                    onUploaded={(payload) => {
-                      const nextUrl = extractPhotoUrl(payload);
-                      setEmployee((prev) => {
-                        if (!prev) return prev;
-                        const nextObj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-                        const merged: EmployeeDetail = {
-                          ...prev,
-                          ...(nextObj as Partial<EmployeeDetail>),
-                        };
-                        if (nextUrl) merged.photo_url = nextUrl;
-                        return merged;
-                      });
-                    }}
-                  />
+                  {!limitedView ? (
+                    <EmployeePhotoUploader
+                      employeeId={employee.id}
+                      photoUrl={extractPhotoUrl(employee)}
+                      onUploaded={(payload) => {
+                        const nextUrl = extractPhotoUrl(payload);
+                        setEmployee((prev) => {
+                          if (!prev) return prev;
+                          const nextObj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+                          const merged: EmployeeDetail = {
+                            ...prev,
+                            ...(nextObj as Partial<EmployeeDetail>),
+                          };
+                          if (nextUrl) merged.photo_url = nextUrl;
+                          return merged;
+                        });
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold">
+                      {`${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`.trim().toUpperCase() || "?"}
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">
                       {employee.first_name} {employee.last_name}
@@ -1018,7 +1059,7 @@ export default function EmployeeDetailPage() {
               </div>
 
               <div className="flex gap-0 border-b border-gray-200">
-                {tabs.map((tab) => {
+                {(limitedView ? tabs.filter((t) => t.id === "personal") : tabs).map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
@@ -1042,12 +1083,14 @@ export default function EmployeeDetailPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-800">Personal & Employment</h3>
-                      <Link
-                        href={`/employees/${id}/edit`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
-                      >
-                        Edit
-                      </Link>
+                      {!limitedView && (
+                        <Link
+                          href={`/employees/${id}/edit`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                        >
+                          Edit
+                        </Link>
+                      )}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="flex items-center gap-2 text-gray-700"><Mail className="w-4 h-4" /> {employee.email}</div>

@@ -14,7 +14,7 @@ export const useAuth = () => {
   const logout = () => {
     removeToken();
     setIsAuthenticated(false);
-    router.push("/login");
+    router.push("/auth/login");
   };
 
   return { isAuthenticated, logout };

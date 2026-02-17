@@ -39,3 +39,41 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 style 
 
 npm install lucide-react
+
+## Super Admin / Developer Console
+
+Super Admin console UI lives at `/super-admin` and supports:
+
+- List companies (via Next API route `GET /api/admin/companies`)
+- Create company (via `POST /api/admin/companies`)
+- Enter company context / Support Mode (via `POST /api/admin/companies/:id/enter`)
+- Exit Support Mode (via `POST /api/admin/companies/exit`)
+- Restore active company after reload (via `GET /api/admin/companies/active`)
+
+### How Support Mode reuses existing company UI
+
+When you click **Login As** on `/super-admin`:
+
+1. The frontend calls the Next.js API route `POST /api/admin/companies/:id/enter`.
+2. The app stores the active company in React Context and mirrors it to `localStorage` keys:
+	- `active_company_id`
+	- `active_company_name`
+3. Existing company-side API calls automatically include the tenant header because `services/api.js` injects:
+	- `X-Active-Company: <active_company_id>`
+4. A global banner renders across the app: “Viewing Company: [Company Name] (Support Mode)”.
+
+### Support Mode behavior
+
+Support Mode grants Super Admin full access in the selected company context.
+Backend should still enforce authorization server-side for safety.
+
+For existing pages, you can disable write buttons using:
+
+- `hooks/useSupportMode.ts` (`isReadOnly` / `isSupportMode`)
+
+### Key files
+
+- `context/ActiveCompanyContext.tsx` (global activeCompany state)
+- `components/providers/AppProviders.tsx` (mounts providers + banner)
+- `components/admin/SuperAdminBanner.tsx` (Support Mode banner)
+- `app/api/admin/companies/*` (Next.js API routes for admin companies contract)

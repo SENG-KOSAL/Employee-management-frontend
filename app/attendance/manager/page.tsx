@@ -84,7 +84,9 @@ export default function ManagerAttendancePage() {
     try {
       const res = await api.get("/api/v1/me");
       const data = res.data?.data ?? res.data;
-      if (data?.role !== "manager" && data?.role !== "admin" && data?.role !== "hr") {
+      const role = String(data?.role || "").toLowerCase();
+      const allowed = ["manager", "admin", "hr", "company_admin", "super_admin", "super-admin", "superadmin", "developer"].includes(role);
+      if (!allowed) {
         router.push("/attendance");
         return;
       }

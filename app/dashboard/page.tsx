@@ -79,8 +79,34 @@ export default function DashboardPage() {
           return;
         }
 
+        const isTenantHost = () => {
+          if (typeof window === "undefined") return false;
+          const host = window.location.hostname;
+          if (!host || host === "localhost" || host === "127.0.0.1") return false;
+
+          const parts = host.split(".").filter(Boolean);
+          if (parts.length < 2) return false;
+
+          const sub = parts[0]?.toLowerCase();
+          if (!sub || sub === "platform" || sub === "app" || sub === "www") return false;
+          return true;
+        };
+
         const me = await fetchMe(false, { ttlMs: 5 * 60 * 1000 });
         if (me) {
+          const meObj = me as unknown as Record<string, unknown>;
+          const employeeObj = (meObj.employee && typeof meObj.employee === "object" ? (meObj.employee as Record<string, unknown>) : null);
+          const roleRaw = (employeeObj?.role ?? meObj.role ?? "") as unknown;
+          const role = String(typeof roleRaw === "string" ? roleRaw : "").toLowerCase();
+          if (role === "super_admin") {
+            const activeCompanyId = typeof window !== "undefined" ? window.localStorage.getItem("active_company_id") : null;
+            // On the platform host, super_admin must select an active company.
+            // On tenant subdomains, allow super_admin to use the admin dashboard.
+            if (!activeCompanyId && !isTenantHost()) {
+              router.replace("/super-admin");
+              return;
+            }
+          }
           setUser({ name: me.name ?? null });
         } else {
           // Fallback if backend returns something unexpected
@@ -171,7 +197,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">Admin Dashboard</p>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || "Admin"}! 👋</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Welcome backkkkkkk, {user?.name || "Admin"}! 👋</h1>
             <p className="text-gray-600 mt-1">Real-time overview of your organization</p>
           </div>
           <button

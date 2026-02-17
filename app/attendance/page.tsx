@@ -57,7 +57,14 @@ export default function AttendancePage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const normalizedRole = (user?.role || "").toLowerCase();
-  const isAdminOrHr = normalizedRole === "admin" || normalizedRole === "hr";
+  const isAdminOrHr =
+    normalizedRole === "admin" ||
+    normalizedRole === "hr" ||
+    normalizedRole === "company_admin" ||
+    normalizedRole === "super_admin" ||
+    normalizedRole === "super-admin" ||
+    normalizedRole === "superadmin" ||
+    normalizedRole === "developer";
   const isEmployee = normalizedRole === "employee";
 
   const employeeLookup = useMemo(() => {

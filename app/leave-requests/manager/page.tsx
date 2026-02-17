@@ -54,7 +54,9 @@ export default function ManagerLeaveApprovalPage() {
     try {
       const meRes = await api.get("/api/v1/me");
       const me = meRes.data?.data ?? meRes.data;
-      if (me?.role !== "manager" && me?.role !== "admin" && me?.role !== "hr") {
+      const role = String(me?.role || "").toLowerCase();
+      const allowed = ["manager", "admin", "hr", "super_admin", "super-admin", "superadmin", "developer"].includes(role);
+      if (!allowed) {
         router.push("/leave-requests");
         return;
       }

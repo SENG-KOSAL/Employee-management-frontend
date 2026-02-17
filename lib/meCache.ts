@@ -1,13 +1,24 @@
 import api from "@/services/api";
 
 export type MePayload = {
+  id?: number | null;
   name?: string | null;
+  username?: string | null;
+  email?: string | null;
   employee?: {
     full_name?: string | null;
     id?: number | null;
     role?: string | null;
   } | null;
   role?: string | null;
+  status?: string | null;
+  company_id?: number | null;
+  company?: {
+    id?: number | null;
+    name?: string | null;
+    slug?: string | null;
+    status?: string | null;
+  } | null;
 };
 
 let cachedMe: MePayload | null = null;
@@ -61,10 +72,25 @@ const normalizeMe = (data: unknown): MePayload | null => {
   const rec = data as Record<string, unknown>;
   const employee = rec.employee;
   const employeeObj = employee && typeof employee === "object" ? (employee as Record<string, unknown>) : null;
+  const company = rec.company;
+  const companyObj = company && typeof company === "object" ? (company as Record<string, unknown>) : null;
 
   return {
+    id: typeof rec.id === "number" ? rec.id : null,
     name: typeof rec.name === "string" ? rec.name : null,
+    username: typeof rec.username === "string" ? rec.username : null,
+    email: typeof rec.email === "string" ? rec.email : null,
     role: typeof rec.role === "string" ? rec.role : null,
+    status: typeof rec.status === "string" ? rec.status : null,
+    company_id: typeof rec.company_id === "number" ? rec.company_id : null,
+    company: companyObj
+      ? {
+          id: typeof companyObj.id === "number" ? companyObj.id : null,
+          name: typeof companyObj.name === "string" ? companyObj.name : null,
+          slug: typeof companyObj.slug === "string" ? companyObj.slug : null,
+          status: typeof companyObj.status === "string" ? companyObj.status : null,
+        }
+      : null,
     employee: employeeObj
       ? {
           full_name: typeof employeeObj.full_name === "string" ? employeeObj.full_name : null,
@@ -121,6 +147,33 @@ export async function fetchMe(
       cachedMe = normalizeMe(payload);
       writeStored(cachedMe);
       return cachedMe;
+    } catch {
+      // Fallback: use legacy localStorage key written by login page (`utils/auth.saveMe`).
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.localStorage.getItem("me");
+          if (raw) {
+            const parsed = JSON.parse(raw) as unknown;
+            const payload = (() => {
+              if (!parsed || typeof parsed !== "object") return null;
+              const top = parsed as Record<string, unknown>;
+              // Some backends return { user: {...} } in login responses.
+              const maybeUser = top.user;
+              if (maybeUser && typeof maybeUser === "object") return maybeUser;
+              const maybeData = top.data;
+              if (maybeData && typeof maybeData === "object") return maybeData;
+              return top;
+            })();
+
+            cachedMe = normalizeMe(payload);
+            writeStored(cachedMe);
+            return cachedMe;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return null;
     } finally {
       pending = null;
     }
