@@ -468,8 +468,8 @@ export default function EmployeeDetailPage() {
       const message = (err as any)?.response?.data?.message as string | undefined;
 
       // If backend forbids /employees/:id for some roles (e.g. company_admin),
-      // fall back to loading the employee from the list endpoint and show a read-only view.
-      if (status === 403) {
+      // or tenant-scoped model binding returns 404, fall back to list endpoint.
+      if (status === 403 || status === 404) {
         try {
           const listRes = await api.get("/api/v1/employees?per_page=500");
           const listData = (listRes as any)?.data?.data ?? (listRes as any)?.data;
