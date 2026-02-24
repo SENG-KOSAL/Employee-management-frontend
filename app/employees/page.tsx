@@ -39,6 +39,13 @@ export default function EmployeesPage() {
   const [perPage, setPerPage] = useState(10);
   const [brokenPhotos, setBrokenPhotos] = useState<Record<number, boolean>>({});
 
+  const getApiErrorMessage = (err: unknown, fallback: string) => {
+    const msg =
+      (err as any)?.response?.data?.message ||
+      (err as any)?.message;
+    return typeof msg === "string" && msg.trim() ? msg : fallback;
+  };
+
   const resolveEmployeePhotoUrl = (emp: Employee): string | null => {
     const raw =
       emp.photo_url ||
@@ -118,9 +125,25 @@ export default function EmployeesPage() {
     try {
       await api.delete(`/api/v1/employees/${id}`);
       setEmployees((prev) => prev.filter((emp) => emp.id !== id));
-    } catch (err) {
-      setError("Failed to delete employee");
-      console.error(err);
+    } catch (err: unknown) {
+      try {
+        // Fallback for backends that expect method override.
+        await api.post(`/api/v1/employees/${id}`, { _method: "DELETE" });
+        setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+        return;
+      } catch (overrideErr: unknown) {
+        try {
+          // Additional fallback used in some Laravel projects.
+          await api.post(`/api/v1/employees/${id}/delete`);
+          setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+          return;
+        } catch (finalErr: unknown) {
+          setError(getApiErrorMessage(finalErr, getApiErrorMessage(overrideErr, getApiErrorMessage(err, "Failed to delete employee"))));
+          console.error(err);
+          console.error(overrideErr);
+          console.error(finalErr);
+        }
+      }
     }
   };
 

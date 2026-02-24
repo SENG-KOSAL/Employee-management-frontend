@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "http://127.0.0.1:8000";
 
+function getCookieDomain(hostWithOptionalPort: string | null): string | undefined {
+  if (!hostWithOptionalPort) return undefined;
+  const host = hostWithOptionalPort.split(":")[0].toLowerCase();
+  if (!host || host === "localhost") return undefined;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return undefined;
+
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length < 2) return undefined;
+
+  return `.${parts.slice(-2).join(".")}`;
+}
+
+function forwardSetCookies(upstreamHeaders: Headers, res: NextResponse) {
+  const hdr = upstreamHeaders as Headers & { getSetCookie?: () => string[] };
+  if (typeof hdr.getSetCookie === "function") {
+    const cookies = hdr.getSetCookie();
+    for (const cookie of cookies) {
+      res.headers.append("set-cookie", cookie);
+    }
+    return;
+  }
+
+  const single = upstreamHeaders.get("set-cookie");
+  if (single) res.headers.append("set-cookie", single);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as unknown;
@@ -36,6 +62,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": upstream.headers.get("content-type") || "application/json",
       },
     });
+    forwardSetCookies(upstream.headers, res);
 
     // If backend returns a bearer token, store it in an httpOnly cookie as well.
     // This allows the same-origin proxy (/api/proxy/*) to attach Authorization server-side.
@@ -50,12 +77,14 @@ export async function POST(request: NextRequest) {
           null;
 
         if (typeof token === "string" && token.length > 0) {
+          const cookieDomain = getCookieDomain(originalHost);
           res.cookies.set("auth_token", token, {
             httpOnly: true,
             sameSite: "lax",
             secure: process.env.NODE_ENV === "production",
             path: "/",
             maxAge: 60 * 60 * 24 * 7,
+            ...(cookieDomain ? { domain: cookieDomain } : {}),
           });
         }
       } catch {

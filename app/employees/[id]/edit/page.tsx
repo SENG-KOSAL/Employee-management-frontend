@@ -239,8 +239,42 @@ export default function EditEmployeePage() {
       setLoading(true);
       setError("");
 
-      const [empRes, benRes, dedRes, catalogBenRes, catalogDedRes] = await Promise.all([
-        api.get(`/api/v1/employees/${empId}`),
+      const coerceRows = (raw: any) => {
+        const listData = raw?.data?.data ?? raw?.data;
+        return Array.isArray(listData) ? listData : Array.isArray(listData?.data) ? listData.data : [];
+      };
+
+      let data: any = null;
+      let detailError: any = null;
+      try {
+        const empRes = await api.get(`/api/v1/employees/${empId}`);
+        data = empRes?.data?.data ?? empRes?.data ?? null;
+      } catch (err: any) {
+        detailError = err;
+      }
+
+      if (!data) {
+        try {
+          const listRes = await api.get("/api/v1/employees?per_page=500");
+          const rows = coerceRows(listRes);
+          const found = rows.find((e: any) => String(e?.id) === String(empId));
+          if (found) {
+            data = found;
+            setSuccess("Loaded limited employee data from list view. Some fields may be unavailable for your role.");
+          }
+        } catch (listErr) {
+          console.error(listErr);
+        }
+      }
+
+      if (!data) {
+        const status = detailError?.response?.status as number | undefined;
+        const message = detailError?.response?.data?.message as string | undefined;
+        setError(message || (status === 404 ? "Employee not found in current company" : "Failed to load employee"));
+        return;
+      }
+
+      const [benRes, dedRes, catalogBenRes, catalogDedRes] = await Promise.allSettled([
         benefitsService.listBenefits(empId),
         benefitsService.listDeductions(empId),
         benefitsService.listBenefits(),
@@ -253,8 +287,6 @@ export default function EditEmployeePage() {
       } catch (allocErr) {
         console.warn('Leave allocations lookup failed', allocErr);
       }
-
-      const data = empRes.data.data || empRes.data;
 
       const docs = (() => {
         if (!data || typeof data !== "object") return null;
@@ -297,10 +329,18 @@ export default function EditEmployeePage() {
       };
       setPhotoUrl(extractPhotoUrl(data));
 
-      const benefitsListRaw = (benRes as any)?.data?.data ?? (benRes as any)?.data ?? [];
-      const deductionsListRaw = (dedRes as any)?.data?.data ?? (dedRes as any)?.data ?? [];
-      const catalogBenefitsRaw = (catalogBenRes as any)?.data?.data ?? (catalogBenRes as any)?.data ?? [];
-      const catalogDeductionsRaw = (catalogDedRes as any)?.data?.data ?? (catalogDedRes as any)?.data ?? [];
+      const pickListData = (result: PromiseSettledResult<any>) => {
+        if (result.status !== "fulfilled") {
+          console.warn("Optional edit dependency failed", result.reason);
+          return [];
+        }
+        return (result.value as any)?.data?.data ?? (result.value as any)?.data ?? [];
+      };
+
+      const benefitsListRaw = pickListData(benRes);
+      const deductionsListRaw = pickListData(dedRes);
+      const catalogBenefitsRaw = pickListData(catalogBenRes);
+      const catalogDeductionsRaw = pickListData(catalogDedRes);
 
       const normalizedBenefits: CatalogItem[] = Array.isArray(benefitsListRaw)
         ? benefitsListRaw.map((b: any) => ({
@@ -410,7 +450,7 @@ export default function EditEmployeePage() {
       setAllocationEdits(edits);
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.message || "Failed to load employee");
+      setError(err?.response?.data?.message || "Failed to load employee");
     } finally {
       setLoading(false);
     }
@@ -583,7 +623,6 @@ export default function EditEmployeePage() {
     const selected = availableDeductions.find((d) => String(d.id) === String(deductionToAdd));
     if (!selected || !id) return;
     try {
-      setAddingDeduction(true);
       setAddingDeduction(true);
       const basePayload = {
         employee_id: Number(id),
@@ -856,35 +895,64 @@ export default function EditEmployeePage() {
         payload.password = formData.password;
       }
 
-      await api.put(`/api/v1/employees/${id}`, payload);
+      if (!id) throw new Error("Missing employee id");
+
+      try {
+        // Canonical backend route:
+        // PUT /api/v1/employees/{employee}
+        await api.put(`/api/v1/employees/${id}`, payload);
+      } catch (err: any) {
+        const status = err?.response?.status as number | undefined;
+        // Minimal safe fallback for setups that only allow PATCH.
+        if (status === 405) {
+          await api.patch(`/api/v1/employees/${id}`, payload);
+        } else {
+          throw err;
+        }
+      }
 
       const benefitUpdates = diffCatalog(initialBenefits, benefitEdits, "benefit");
       const deductionUpdates = diffCatalog(initialDeductions, deductionEdits, "deduction");
+      const syncWarnings: string[] = [];
 
       // Apply catalog updates sequentially to avoid backend race issues
       for (const b of benefitUpdates) {
         if (!b.id) continue;
-        await benefitsService.updateBenefit({
-          id: Number(b.id),
-          employee_id: Number(id),
-          benefit_name: b.benefit_name || b.name || "",
-          amount: Number(b.amount ?? 0),
-          type: b.type === "percentage" ? "percentage" : "fixed",
-        });
+        try {
+          await benefitsService.updateBenefit({
+            id: Number(b.id),
+            employee_id: Number(id),
+            benefit_name: b.benefit_name || b.name || "",
+            amount: Number(b.amount ?? 0),
+            type: b.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some benefits";
+          syncWarnings.push(String(msg));
+        }
       }
 
       for (const d of deductionUpdates) {
         if (!d.id) continue;
-        await benefitsService.updateDeduction({
-          id: Number(d.id),
-          employee_id: Number(id),
-          deduction_name: d.deduction_name || d.name || "",
-          amount: Number(d.amount ?? 0),
-          type: d.type === "percentage" ? "percentage" : "fixed",
-        });
+        try {
+          await benefitsService.updateDeduction({
+            id: Number(d.id),
+            employee_id: Number(id),
+            deduction_name: d.deduction_name || d.name || "",
+            amount: Number(d.amount ?? 0),
+            type: d.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some deductions";
+          syncWarnings.push(String(msg));
+        }
       }
 
-      setSuccess("Employee updated successfully!");
+      setSuccess(
+        syncWarnings.length
+          ? `Employee updated, but some benefit/deduction updates failed: ${syncWarnings[0]}`
+          : "Employee updated successfully!"
+      );
       setTimeout(() => {
         router.push(`/employees/${id}`);
       }, 1200);

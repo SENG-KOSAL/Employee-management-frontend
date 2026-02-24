@@ -17,6 +17,20 @@ function pickHeader(req: NextRequest, name: string): string | null {
   return req.headers.get(name);
 }
 
+function forwardSetCookies(upstreamHeaders: Headers, targetHeaders: Headers) {
+  const hdr = upstreamHeaders as Headers & { getSetCookie?: () => string[] };
+  if (typeof hdr.getSetCookie === "function") {
+    const cookies = hdr.getSetCookie();
+    for (const cookie of cookies) {
+      targetHeaders.append("set-cookie", cookie);
+    }
+    return;
+  }
+
+  const single = upstreamHeaders.get("set-cookie");
+  if (single) targetHeaders.append("set-cookie", single);
+}
+
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
 
@@ -62,9 +76,11 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
 
   const authHeader = pickHeader(req, "authorization");
   const cookieToken = req.cookies.get("auth_token")?.value || null;
+  const incomingCookieHeader = pickHeader(req, "cookie");
   const effectiveAuth = authHeader || (cookieToken ? `Bearer ${cookieToken}` : null);
   const authSource = authHeader ? "header" : cookieToken ? "cookie" : "none";
   if (effectiveAuth) headers.Authorization = effectiveAuth;
+  if (incomingCookieHeader) headers.Cookie = incomingCookieHeader;
 
   const activeCompany = pickHeader(req, "x-active-company");
   if (activeCompany) headers["X-Active-Company"] = activeCompany;
@@ -90,6 +106,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const resHeaders = new Headers();
   const upstreamContentType = upstreamRes.headers.get("content-type");
   if (upstreamContentType) resHeaders.set("content-type", upstreamContentType);
+  forwardSetCookies(upstreamRes.headers, resHeaders);
 
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -120,6 +137,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
           auth_source: authSource,
           has_authorization_header: Boolean(authHeader),
           has_auth_cookie: Boolean(cookieToken),
+          has_cookie_header: Boolean(incomingCookieHeader),
           has_active_company: Boolean(activeCompany),
           original_host: originalHost || null,
           original_proto: originalProto || null,
