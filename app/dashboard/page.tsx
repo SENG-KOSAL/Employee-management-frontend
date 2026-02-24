@@ -7,18 +7,27 @@ import { getToken, removeToken } from "@/utils/auth";
 import {
   Users,
   Clock,
-  LogOut,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
   Calendar,
   FileText,
   RefreshCw,
   ChevronRight,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
+import { fetchMe } from "@/lib/meCache";
 
 function formatTime(date: string) {
   const now = new Date();
@@ -37,10 +46,29 @@ function formatTime(date: string) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ name?: string | null } | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
-  const { stats, loading: loadingStats, error: statsError, refetch } = useDashboardStats(30000);
+  // Load once; use the Refresh button when needed.
+  const { stats, loading: loadingStats, error: statsError, refetch } = useDashboardStats();
   const { activities, loading: loadingActivities } = useRecentActivity();
+
+  // Mock data for charts
+  const attendanceData = [
+    { name: "Mon", present: 42, absent: 3, late: 2 },
+    { name: "Tue", present: 45, absent: 1, late: 1 },
+    { name: "Wed", present: 43, absent: 2, late: 4 },
+    { name: "Thu", present: 46, absent: 0, late: 3 },
+    { name: "Fri", present: 41, absent: 5, late: 2 },
+  ];
+
+  const employeeGrowthData = [
+    { month: "Aug", employees: 24 },
+    { month: "Sep", employees: 28 },
+    { month: "Oct", employees: 35 },
+    { month: "Nov", employees: 42 },
+    { month: "Dec", employees: 48 },
+    { month: "Jan", employees: 52 },
+  ];
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -51,8 +79,44 @@ export default function DashboardPage() {
           return;
         }
 
-        const res = await api.get("/me");
-        setUser(res.data.data || res.data);
+        const isTenantHost = () => {
+          if (typeof window === "undefined") return false;
+          const host = window.location.hostname;
+          if (!host || host === "localhost" || host === "127.0.0.1") return false;
+
+          const parts = host.split(".").filter(Boolean);
+          if (parts.length < 2) return false;
+
+          const sub = parts[0]?.toLowerCase();
+          if (!sub || sub === "platform" || sub === "app" || sub === "www") return false;
+          return true;
+        };
+
+        const me = await fetchMe(false, { ttlMs: 5 * 60 * 1000 });
+        if (me) {
+          const meObj = me as unknown as Record<string, unknown>;
+          const employeeObj = (meObj.employee && typeof meObj.employee === "object" ? (meObj.employee as Record<string, unknown>) : null);
+          const roleRaw = (employeeObj?.role ?? meObj.role ?? "") as unknown;
+          const role = String(typeof roleRaw === "string" ? roleRaw : "").toLowerCase();
+          if (role === "super_admin") {
+            const activeCompanyId = typeof window !== "undefined" ? window.localStorage.getItem("active_company_id") : null;
+            // On the platform host, super_admin must select an active company.
+            // On tenant subdomains, allow super_admin to use the admin dashboard.
+            if (!activeCompanyId && !isTenantHost()) {
+              router.replace("/super-admin");
+              return;
+            }
+          }
+          setUser({ name: me.name ?? null });
+        } else {
+          // Fallback if backend returns something unexpected
+          const res = await api.get("/me");
+          const data = (res.data?.data ?? res.data ?? null) as unknown;
+          if (data && typeof data === "object") {
+            const rec = data as Record<string, unknown>;
+            setUser({ name: typeof rec.name === "string" ? rec.name : null });
+          }
+        }
         setLoadingUser(false);
       } catch (err) {
         console.error("User fetch error:", err);
@@ -133,7 +197,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">Admin Dashboard</p>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || "Admin"}! 👋</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Welcome backkkkkkk, {user?.name || "Admin"}! 👋</h1>
             <p className="text-gray-600 mt-1">Real-time overview of your organization</p>
           </div>
           <button
@@ -175,11 +239,80 @@ export default function DashboardPage() {
           })}
         </div>
 
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Weekly Attendance</h3>
+            <div className="h-75 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attendanceData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                  />
+                  <RechartsTooltip 
+                    cursor={{ fill: "#F3F4F6" }}
+                    contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: "20px" }} />
+                  <Bar dataKey="present" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Present" barSize={32} />
+                  <Bar dataKey="absent" fill="#ef4444" radius={[4, 4, 0, 0]} name="Absent" barSize={32} />
+                  <Bar dataKey="late" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Late" barSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Employee Growth</h3>
+            <div className="h-75 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={employeeGrowthData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="employees" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={4} 
+                    dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} 
+                    activeDot={{ r: 6, strokeWidth: 0 }} 
+                    name="Total Employees" 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={() => router.push("/leave-requests/create")}
-            className="group bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group bg-linear-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
           >
             <Calendar className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-bold text-lg">Create Leave Request</h3>
@@ -187,7 +320,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => router.push("/payroll")}
-            className="group bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group bg-linear-to-br from-green-500 to-green-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
           >
             <FileText className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-bold text-lg">Manage Payroll</h3>
@@ -195,7 +328,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => router.push("/employees")}
-            className="group bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group bg-linear-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
           >
             <Users className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-bold text-lg">View Employees</h3>
@@ -236,7 +369,7 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-gray-600 mt-1 truncate">{activity.description}</p>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 flex-shrink-0 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 shrink-0 transition-colors" />
                   </div>
                 </div>
               ))

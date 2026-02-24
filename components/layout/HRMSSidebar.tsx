@@ -9,8 +9,7 @@ import {
   Users,
   Clock,
   Wallet,
-  Megaphone,
-  BarChart3,
+  ShieldCheck,
   Shield,
   Settings,
   CalendarClock,
@@ -41,11 +40,16 @@ import {
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import api from "@/services/api"
-import { getToken, removeToken } from "@/utils/auth"
+import { getMe, getToken, removeMe, removeToken } from "@/utils/auth"
 import { useRouter } from "next/navigation"
+import TenantSwitcher from "@/components/admin/TenantSwitcher"
+import { useActiveCompany } from "@/context/ActiveCompanyContext"
 
 type MePayload = {
   name?: string
+  company?: {
+    name?: string | null
+  } | null
   employee?: {
     full_name?: string | null
     id?: number
@@ -54,38 +58,37 @@ type MePayload = {
   role?: string | null
 }
 
-const employeeNavigation = {
-  main: [
-    {
-      title: "My Attendance",
-      icon: Clock,
-      href: "/attendance/employee",
-    },
-    {
-      title: "Request Leave",
-      icon: CalendarClock,
-      href: "/leave-requests/employee",
-    },
-  ],
-  system: [],
-}
-
 const managerNavigation = {
   main: [
     {
-      title: "Team Attendance",
-      icon: Clock,
-      href: "/attendance/manager",
+      title: "Manager Portal",
+      icon: ShieldCheck,
+      href: "/manager",
     },
     {
-      title: "Approve Leave",
+      title: "My Profile",
+      icon: Users,
+      href: "/manager/profile",
+    },
+    {
+      title: "Team Employees",
+      icon: Clock,
+      href: "/manager/team",
+    },
+    {
+      title: "Team Attendance",
       icon: CalendarClock,
-      href: "/leave-requests/manager",
+      href: "/manager/attendance",
+    },
+    {
+      title: "Leave Approvals",
+      icon: CalendarClock,
+      href: "/manager/leave-approvals",
     },
     {
       title: "Request Leave",
       icon: CalendarClock,
-      href: "/leave-requests/employee",
+      href: "/manager/request-leave",
     },
   ],
   system: [],
@@ -100,9 +103,15 @@ const navigation = {
       href: "/dashboard",
     },
     {
+      title: "Manager Portal",
+      icon: ShieldCheck,
+      href: "/manager",
+    },
+    {
       title: "Employee Management",
       icon: Users,
       items: [
+        { title: "Dashboard", href: "/employees/dashboard" },
         { title: "Employees", href: "/employees" },
         // { title: "Departments", href: "/departments" },
         // { title: "Positions / Roles", href: "/positions" },
@@ -112,9 +121,10 @@ const navigation = {
       title: "Attendance & Leave",
       icon: Clock,
       items: [
+        { title: "Dashboard", href: "/attendance/dashboard" },
         { title: "Attendance", href: "/attendance" },
         { title: "Leave Requests", href: "/leave-requests" },
-        { title: "Holidays", href: "/holidays" },
+        // { title: "Holidays", href: "/holidays" },
         { title: "Overtime", href: "/request/OverTime" },
       ],
     },
@@ -122,6 +132,7 @@ const navigation = {
       title: "Payroll",
       icon: Wallet,
       items: [
+        { title: "Dashboard", href: "/payroll/dashboard" },
         { title: "Salary", href: "/salaries" },
         { title: "Payslips", href: "/payslips" },
         { title: "Payroll", href: "/payroll" },
@@ -216,7 +227,7 @@ function NavItem({
   )
 }
 
-function SidebarNav({ nav }: { nav: typeof navigation | typeof employeeNavigation }) {
+function SidebarNav({ nav }: { nav: typeof navigation | typeof managerNavigation }) {
   const pathname = usePathname()
 
   return (
@@ -248,25 +259,70 @@ function SidebarNav({ nav }: { nav: typeof navigation | typeof employeeNavigatio
   )
 }
 
-function CollapseToggle() {
+function SidebarUserFooter({
+  displayName,
+  userRole,
+  initials,
+  onLogout,
+}: {
+  displayName: string
+  userRole: string | null
+  initials: string
+  onLogout: () => void
+}) {
   const { state, toggleSidebar } = useSidebar()
 
   return (
-    <button
-      onClick={toggleSidebar}
-      className="flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-700"
-      aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
-    >
-      {state === "expanded" ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
-    </button>
+    <SidebarFooter className="border-t border-gray-100 p-2">
+      <div className={`flex items-center gap-2 p-2 rounded-xl transition-all mb-2 ${state === "expanded" ? "bg-gray-50" : "justify-center"}`}>
+        <div className="relative shrink-0">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-white border border-gray-200 shadow-sm text-blue-600 font-bold text-xs">
+            {initials}
+          </div>
+          <span className="absolute -bottom-0.5 -right-0.5 block size-2 rounded-full bg-green-500 ring-1.5 ring-white"></span>
+        </div>
+
+        {state === "expanded" && (
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate leading-none">{displayName || "User"}</p>
+            <p className="text-xs text-gray-500 truncate mt-1 capitalize">{userRole || "Team Member"}</p>
+          </div>
+        )}
+      </div>
+
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            onClick={onLogout}
+            tooltip="Sign out"
+            className="text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="size-4" />
+            <span>Sign out</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            onClick={toggleSidebar}
+            tooltip={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
+            className="text-gray-500"
+          >
+            {state === "expanded" ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+            <span>Collapse sidebar</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarFooter>
   )
 }
 
 export function HRMSSidebar({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const router = useRouter()
+  const { activeCompany, isSupportMode } = useActiveCompany()
   const [displayName, setDisplayName] = useState<string>("")
   const [me, setMe] = useState<MePayload | null>(null)
-  const userRole = useMemo(() => me?.role || me?.employee?.role || null, [me])
+  // HRMSSidebar is for admin/manager UI. Employee UI uses EmployeeSidebar.
 
   const initials = useMemo(() => {
     const raw = displayName.trim()
@@ -277,24 +333,75 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
     return (first + second).toUpperCase() || "--"
   }, [displayName])
 
+  const userRole = useMemo(() => (me?.employee?.role ?? me?.role ?? null), [me?.employee?.role, me?.role])
+  const companyName = useMemo(() => {
+    const supportName = activeCompany?.name?.trim()
+    if (supportName) return supportName
+    const meCompany = me?.company?.name?.trim()
+    if (meCompany) return meCompany
+    return "Company"
+  }, [activeCompany?.name, me?.company?.name])
+  const normalizedRole = (userRole || "").toLowerCase()
+  const isManager = normalizedRole === "manager"
+  const isSuperAdmin =
+    normalizedRole === "super_admin" ||
+    normalizedRole === "super-admin" ||
+    normalizedRole === "superadmin" ||
+    normalizedRole === "developer"
+  const isAdmin = normalizedRole === "admin" || isSuperAdmin
+
+  const navToUse = useMemo(() => {
+    if (isManager) return managerNavigation
+    if (isAdmin) return navigation
+    const base = {
+      ...navigation,
+      system: navigation.system.filter((item) => item.href !== "/users-permissions"),
+    }
+
+    if (isSuperAdmin) {
+      return {
+        ...base,
+        system: [
+          { title: "Developer Console", icon: ShieldCheck, href: "/super-admin" },
+          ...base.system,
+        ],
+      }
+    }
+
+    return base
+  }, [isAdmin, isManager, isSuperAdmin])
+
+  useEffect(() => {
+    if (!isManager) return
+    if (!pathname) return
+    if (pathname === "/manager" || pathname.startsWith("/manager/")) return
+    router.replace("/manager")
+  }, [isManager, pathname, router])
+
   useEffect(() => {
     const token = getToken()
     if (!token) return
 
-    const loadMe = async () => {
-      try {
-        const res = await api.get("/api/v1/me")
-        const data: any = res.data?.data ?? res.data
-        const me: MePayload = data ?? {}
-        const name = me.employee?.full_name || me.name || ""
-        setDisplayName(name)
-        setMe(me)
-      } catch {
-        // ignore; we'll just show initials placeholder
-      }
+    // Use cached user info to avoid repeated /me calls.
+    const cached = getMe<MePayload>()
+    if (cached) {
+      setMe(cached)
+      setDisplayName(cached.employee?.full_name || cached.name || "")
+      return
     }
 
-    loadMe()
+    // Fallback: fetch once if cache missing.
+    api
+      .get("/api/v1/me")
+      .then((res) => {
+        const data: unknown = (res.data as { data?: unknown } | undefined)?.data ?? res.data
+        const next: MePayload = (data && typeof data === "object" ? (data as MePayload) : {}) as MePayload
+        setMe(next)
+        setDisplayName(next.employee?.full_name || next.name || "")
+      })
+      .catch(() => {
+        // ignore
+      })
   }, [])
 
   const handleLogout = async () => {
@@ -303,6 +410,7 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore network/API errors; still clear local token
     } finally {
+      removeMe()
       removeToken()
       router.push("/auth/login")
     }
@@ -318,66 +426,42 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
               HR
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-              <span className="text-sm font-semibold text-gray-900">HRMS Pro</span>
-              <span className="text-xs text-gray-500">Management System</span>
+              <span className="text-sm font-semibold text-gray-900 truncate">{companyName}</span>
+              <span className="text-xs text-gray-500">{isSupportMode ? "Support Mode" : "Management System"}</span>
             </div>
           </div>
         </SidebarHeader>
 
         {/* Navigation Content */}
         <SidebarContent className="px-2 py-2">
-          <SidebarNav
-            nav={
-              userRole === "employee"
-                ? employeeNavigation
-                : userRole === "manager"
-                ? managerNavigation
-                : navigation
-            }
-          />
+          <SidebarNav nav={navToUse} />
         </SidebarContent>
 
-        {/* Footer with Collapse Toggle */}
-        <SidebarFooter className="border-t border-gray-100 p-3">
-          <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
-            <span className="text-xs text-gray-400 group-data-[collapsible=icon]:hidden">Press ⌘B to toggle</span>
-            <CollapseToggle />
-          </div>
-        </SidebarFooter>
+        {/* Footer with User & Actions */}
+        <SidebarUserFooter 
+          displayName={displayName}
+          userRole={userRole}
+          initials={initials}
+          onLogout={handleLogout}
+        />
       </Sidebar>
 
       {/* Main Content Area */}
       <SidebarInset>
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-gray-200 bg-white px-6">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-gray-200 bg-white/80 backdrop-blur-md px-6">
           <SidebarTrigger className="md:hidden" />
           <div className="flex-1">
-            <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+            <h1 className="text-xl font-bold text-gray-800">{companyName}</h1>
+            <p className="text-xs text-gray-500 hidden sm:block">Overview of your organization</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative group">
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-medium">
-                  {initials}
-                </div>
-                <span className="text-sm font-medium text-gray-700 hidden sm:inline">
-                  {displayName || "Account"}
-                </span>
-              </div>
 
-              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900 truncate">{displayName || "Account"}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <LogOut className="size-4" /> Logout
-                </button>
+          {isSuperAdmin ? <TenantSwitcher /> : null}
+          
+          <div className="flex items-center gap-2">
+              <div className="text-sm text-right hidden sm:block">
+                  <p className="text-xs text-gray-500">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
-            </div>
           </div>
         </header>
 

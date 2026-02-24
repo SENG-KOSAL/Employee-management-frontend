@@ -10,9 +10,12 @@ import { leaveAllocationsService, type LeaveAllocation } from "@/services/leaveA
 import type { LeaveType } from "@/types/hr";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, User, Lock, Gift, CalendarClock, Clock } from "lucide-react";
+import { ArrowLeft, User, Lock, Gift, CalendarClock, Clock, Shield, FileText } from "lucide-react";
 import { workSchedulesService } from "@/services/workSchedules";
-type TabType = "personal" | "account" | "benefits" | "attendance" | "work-schedule";
+import EmployeePhotoUploader from "@/components/employees/EmployeePhotoUploader";
+import { uploadEmployeeDocuments, type EmployeeDocumentsUpload } from "@/services/employees";
+
+type TabType = "personal" | "account" | "legal" | "documents" | "benefits" | "attendance" | "work-schedule";
 
 interface CatalogItem {
   id?: number | string;
@@ -42,6 +45,15 @@ interface FormData {
   password: string;
   confirm_password: string;
   role: string;
+  // Legal + Emergency
+  nationality: string;
+  national_id_number: string;
+  nssf_number: string;
+  passport_number: string;
+  work_permit_number: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  emergency_contact_relationship: string;
   health_insurance: boolean;
   retirement_plan: boolean; 
   dental_coverage: boolean;
@@ -54,6 +66,8 @@ interface FormData {
 const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "personal", label: "Personal Info", icon: User },
   { id: "account", label: "User Account", icon: Lock },
+  { id: "legal", label: "Legal & Emergency", icon: Shield },
+  { id: "documents", label: "Documents", icon: FileText },
   { id: "benefits", label: "Benefits & Deductions", icon: Gift },
   { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
   { id: "work-schedule", label: "Work Schedule", icon: Clock },
@@ -69,6 +83,16 @@ export default function EditEmployeePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<{
+    id_card_file_path?: string | null;
+    contract_file_path?: string | null;
+    cv_file_path?: string | null;
+    certificate_file_path?: string | null;
+  } | null>(null);
+  const [documentFiles, setDocumentFiles] = useState<EmployeeDocumentsUpload>({});
+  const [documentsUploading, setDocumentsUploading] = useState(false);
+  const [documentsNotice, setDocumentsNotice] = useState<string>("");
   const [catalogBenefits, setCatalogBenefits] = useState<CatalogItem[]>([]);
   const [catalogDeductions, setCatalogDeductions] = useState<CatalogItem[]>([]);
   const [availableBenefits, setAvailableBenefits] = useState<CatalogItem[]>([]);
@@ -128,6 +152,14 @@ export default function EditEmployeePage() {
     password: "",
     confirm_password: "",
     role: "employee",
+    nationality: "",
+    national_id_number: "",
+    nssf_number: "",
+    passport_number: "",
+    work_permit_number: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+    emergency_contact_relationship: "",
     health_insurance: false,
     retirement_plan: false,
     dental_coverage: false,
@@ -187,13 +219,62 @@ export default function EditEmployeePage() {
     loadSchedules();
   }, [id, router]);
 
+  const hasSelectedDocuments = Boolean(
+    documentFiles.id_card || documentFiles.contract || documentFiles.cv || documentFiles.certificate
+  );
+
+  const resolveFileUrl = (filePath?: string | null) => {
+    if (!filePath) return "";
+    const raw = String(filePath);
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+    if (!apiBase) return raw;
+    const base = apiBase.replace(/\/$/, "");
+    if (raw.startsWith("/")) return `${base}${raw}`;
+    return `${base}/${raw.replace(/^\//, "")}`;
+  };
+
   const fetchEmployee = async (empId: string | number) => {
     try {
       setLoading(true);
       setError("");
 
-      const [empRes, benRes, dedRes, catalogBenRes, catalogDedRes] = await Promise.all([
-        api.get(`/api/v1/employees/${empId}`),
+      const coerceRows = (raw: any) => {
+        const listData = raw?.data?.data ?? raw?.data;
+        return Array.isArray(listData) ? listData : Array.isArray(listData?.data) ? listData.data : [];
+      };
+
+      let data: any = null;
+      let detailError: any = null;
+      try {
+        const empRes = await api.get(`/api/v1/employees/${empId}`);
+        data = empRes?.data?.data ?? empRes?.data ?? null;
+      } catch (err: any) {
+        detailError = err;
+      }
+
+      if (!data) {
+        try {
+          const listRes = await api.get("/api/v1/employees?per_page=500");
+          const rows = coerceRows(listRes);
+          const found = rows.find((e: any) => String(e?.id) === String(empId));
+          if (found) {
+            data = found;
+            setSuccess("Loaded limited employee data from list view. Some fields may be unavailable for your role.");
+          }
+        } catch (listErr) {
+          console.error(listErr);
+        }
+      }
+
+      if (!data) {
+        const status = detailError?.response?.status as number | undefined;
+        const message = detailError?.response?.data?.message as string | undefined;
+        setError(message || (status === 404 ? "Employee not found in current company" : "Failed to load employee"));
+        return;
+      }
+
+      const [benRes, dedRes, catalogBenRes, catalogDedRes] = await Promise.allSettled([
         benefitsService.listBenefits(empId),
         benefitsService.listDeductions(empId),
         benefitsService.listBenefits(),
@@ -207,12 +288,59 @@ export default function EditEmployeePage() {
         console.warn('Leave allocations lookup failed', allocErr);
       }
 
-      const data = empRes.data.data || empRes.data;
+      const docs = (() => {
+        if (!data || typeof data !== "object") return null;
+        const rec = data as Record<string, unknown>;
+        const value = rec.documents;
+        if (!value || typeof value !== "object") return null;
+        return value as Record<string, unknown>;
+      })();
 
-      const benefitsListRaw = (benRes as any)?.data?.data ?? (benRes as any)?.data ?? [];
-      const deductionsListRaw = (dedRes as any)?.data?.data ?? (dedRes as any)?.data ?? [];
-      const catalogBenefitsRaw = (catalogBenRes as any)?.data?.data ?? (catalogBenRes as any)?.data ?? [];
-      const catalogDeductionsRaw = (catalogDedRes as any)?.data?.data ?? (catalogDedRes as any)?.data ?? [];
+      setDocuments(
+        docs
+          ? {
+              id_card_file_path: typeof docs.id_card_file_path === "string" ? docs.id_card_file_path : null,
+              contract_file_path: typeof docs.contract_file_path === "string" ? docs.contract_file_path : null,
+              cv_file_path: typeof docs.cv_file_path === "string" ? docs.cv_file_path : null,
+              certificate_file_path: typeof docs.certificate_file_path === "string" ? docs.certificate_file_path : null,
+            }
+          : null
+      );
+
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+      const extractPhotoUrl = (obj: unknown): string | null => {
+        if (!obj || typeof obj !== "object") return null;
+        const rec = obj as Record<string, unknown>;
+        const raw =
+          rec.photo_url ??
+          rec.photoUrl ??
+          rec.photo ??
+          rec.avatar_url ??
+          rec.avatar ??
+          rec.profile_photo_url ??
+          rec.profile_image_url ??
+          rec.image_url ??
+          rec.image ??
+          null;
+        if (raw === null || raw === undefined) return null;
+        const url = String(raw);
+        if (url.startsWith("/") && apiBase) return `${apiBase.replace(/\/$/, "")}${url}`;
+        return url;
+      };
+      setPhotoUrl(extractPhotoUrl(data));
+
+      const pickListData = (result: PromiseSettledResult<any>) => {
+        if (result.status !== "fulfilled") {
+          console.warn("Optional edit dependency failed", result.reason);
+          return [];
+        }
+        return (result.value as any)?.data?.data ?? (result.value as any)?.data ?? [];
+      };
+
+      const benefitsListRaw = pickListData(benRes);
+      const deductionsListRaw = pickListData(dedRes);
+      const catalogBenefitsRaw = pickListData(catalogBenRes);
+      const catalogDeductionsRaw = pickListData(catalogDedRes);
 
       const normalizedBenefits: CatalogItem[] = Array.isArray(benefitsListRaw)
         ? benefitsListRaw.map((b: any) => ({
@@ -290,6 +418,14 @@ export default function EditEmployeePage() {
         tax_percentage: data.deductions?.tax_percentage ?? 15,
         social_security_percentage: data.deductions?.social_security_percentage ?? 6.2,
         health_insurance_deduction: data.deductions?.health_insurance_deduction ?? 0,
+        nationality: data.nationality || "",
+        national_id_number: data.national_id_number || "",
+        nssf_number: data.nssf_number || "",
+        passport_number: data.passport_number || "",
+        work_permit_number: data.work_permit_number || "",
+        emergency_contact_name: data.emergency_contact_name || "",
+        emergency_contact_phone: data.emergency_contact_phone || "",
+        emergency_contact_relationship: data.emergency_contact_relationship || "",
       }));
       setSelectedScheduleId(data?.work_schedule_id ? String(data.work_schedule_id) : "");
       setScheduleEffectiveFrom(
@@ -314,7 +450,7 @@ export default function EditEmployeePage() {
       setAllocationEdits(edits);
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.message || "Failed to load employee");
+      setError(err?.response?.data?.message || "Failed to load employee");
     } finally {
       setLoading(false);
     }
@@ -328,6 +464,65 @@ export default function EditEmployeePage() {
       ...prev,
       [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
+  };
+
+  const updateDocumentFile = (key: keyof EmployeeDocumentsUpload, file: File | null) => {
+    setDocumentFiles((prev) => ({
+      ...prev,
+      [key]: file,
+    }));
+  };
+
+  const handleDocumentsUpload = async () => {
+    if (!id) return;
+    if (!hasSelectedDocuments) {
+      setDocumentsNotice("Please select at least one document to upload.");
+      return;
+    }
+
+    try {
+      setDocumentsUploading(true);
+      setDocumentsNotice("");
+
+      const hasExisting = Boolean(
+        documents && Object.values(documents).some((v) => (v ? String(v).trim().length > 0 : false))
+      );
+      const method = hasExisting ? "patch" : "post";
+
+      const res = await uploadEmployeeDocuments(id, documentFiles, method);
+
+      const responseData = (res as unknown as { data?: unknown })?.data;
+      const payload = (() => {
+        if (!responseData || typeof responseData !== "object") return null;
+        const top = responseData as Record<string, unknown>;
+        const maybeData = top.data;
+        if (maybeData && typeof maybeData === "object") return maybeData as Record<string, unknown>;
+        return top;
+      })();
+
+      const nextDocs = (() => {
+        if (!payload) return null;
+        const value = payload.documents;
+        if (!value || typeof value !== "object") return null;
+        return value as Record<string, unknown>;
+      })();
+
+      if (nextDocs) {
+        setDocuments({
+          id_card_file_path: typeof nextDocs.id_card_file_path === "string" ? nextDocs.id_card_file_path : null,
+          contract_file_path: typeof nextDocs.contract_file_path === "string" ? nextDocs.contract_file_path : null,
+          cv_file_path: typeof nextDocs.cv_file_path === "string" ? nextDocs.cv_file_path : null,
+          certificate_file_path: typeof nextDocs.certificate_file_path === "string" ? nextDocs.certificate_file_path : null,
+        });
+      }
+      setDocumentFiles({});
+      setDocumentsNotice("Documents uploaded successfully.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Documents upload failed";
+      setDocumentsNotice(msg);
+    } finally {
+      setDocumentsUploading(false);
+    }
   };
 
   const handleCheckboxChange = (name: string, checked: boolean) => {
@@ -428,7 +623,6 @@ export default function EditEmployeePage() {
     const selected = availableDeductions.find((d) => String(d.id) === String(deductionToAdd));
     if (!selected || !id) return;
     try {
-      setAddingDeduction(true);
       setAddingDeduction(true);
       const basePayload = {
         employee_id: Number(id),
@@ -673,6 +867,14 @@ export default function EditEmployeePage() {
         start_date: formData.start_date,
         salary: formData.salary,
         status: formData.status,
+        nationality: formData.nationality,
+        national_id_number: formData.national_id_number,
+        nssf_number: formData.nssf_number,
+        passport_number: formData.passport_number,
+        work_permit_number: formData.work_permit_number,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_relationship: formData.emergency_contact_relationship,
         name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
         role: formData.role,
         benefits: {
@@ -693,35 +895,64 @@ export default function EditEmployeePage() {
         payload.password = formData.password;
       }
 
-      await api.put(`/api/v1/employees/${id}`, payload);
+      if (!id) throw new Error("Missing employee id");
+
+      try {
+        // Canonical backend route:
+        // PUT /api/v1/employees/{employee}
+        await api.put(`/api/v1/employees/${id}`, payload);
+      } catch (err: any) {
+        const status = err?.response?.status as number | undefined;
+        // Minimal safe fallback for setups that only allow PATCH.
+        if (status === 405) {
+          await api.patch(`/api/v1/employees/${id}`, payload);
+        } else {
+          throw err;
+        }
+      }
 
       const benefitUpdates = diffCatalog(initialBenefits, benefitEdits, "benefit");
       const deductionUpdates = diffCatalog(initialDeductions, deductionEdits, "deduction");
+      const syncWarnings: string[] = [];
 
       // Apply catalog updates sequentially to avoid backend race issues
       for (const b of benefitUpdates) {
         if (!b.id) continue;
-        await benefitsService.updateBenefit({
-          id: Number(b.id),
-          employee_id: Number(id),
-          benefit_name: b.benefit_name || b.name || "",
-          amount: Number(b.amount ?? 0),
-          type: b.type === "percentage" ? "percentage" : "fixed",
-        });
+        try {
+          await benefitsService.updateBenefit({
+            id: Number(b.id),
+            employee_id: Number(id),
+            benefit_name: b.benefit_name || b.name || "",
+            amount: Number(b.amount ?? 0),
+            type: b.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some benefits";
+          syncWarnings.push(String(msg));
+        }
       }
 
       for (const d of deductionUpdates) {
         if (!d.id) continue;
-        await benefitsService.updateDeduction({
-          id: Number(d.id),
-          employee_id: Number(id),
-          deduction_name: d.deduction_name || d.name || "",
-          amount: Number(d.amount ?? 0),
-          type: d.type === "percentage" ? "percentage" : "fixed",
-        });
+        try {
+          await benefitsService.updateDeduction({
+            id: Number(d.id),
+            employee_id: Number(id),
+            deduction_name: d.deduction_name || d.name || "",
+            amount: Number(d.amount ?? 0),
+            type: d.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some deductions";
+          syncWarnings.push(String(msg));
+        }
       }
 
-      setSuccess("Employee updated successfully!");
+      setSuccess(
+        syncWarnings.length
+          ? `Employee updated, but some benefit/deduction updates failed: ${syncWarnings[0]}`
+          : "Employee updated successfully!"
+      );
       setTimeout(() => {
         router.push(`/employees/${id}`);
       }, 1200);
@@ -758,6 +989,39 @@ export default function EditEmployeePage() {
           <h1 className="text-3xl font-bold text-gray-900">Edit Employee</h1>
           <p className="text-gray-500 mt-1">Update employee details across multiple sections</p>
         </div>
+
+        {id ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <EmployeePhotoUploader
+              employeeId={id}
+              photoUrl={photoUrl}
+              onUploaded={(payload) => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+                const extractPhotoUrl = (obj: unknown): string | null => {
+                  if (!obj || typeof obj !== "object") return null;
+                  const rec = obj as Record<string, unknown>;
+                  const raw =
+                    rec.photo_url ??
+                    rec.photoUrl ??
+                    rec.photo ??
+                    rec.avatar_url ??
+                    rec.avatar ??
+                    rec.profile_photo_url ??
+                    rec.profile_image_url ??
+                    rec.image_url ??
+                    rec.image ??
+                    null;
+                  if (raw === null || raw === undefined) return null;
+                  const url = String(raw);
+                  if (url.startsWith("/") && apiBase) return `${apiBase.replace(/\/$/, "")}${url}`;
+                  return url;
+                };
+                const next = extractPhotoUrl(payload);
+                if (next) setPhotoUrl(next);
+              }}
+            />
+          </div>
+        ) : null}
 
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
@@ -994,6 +1258,228 @@ export default function EditEmployeePage() {
                       className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "legal" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Legal & Emergency</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nationality</label>
+                    <select
+                      name="nationality"
+                      value={formData.nationality}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">-</option>
+                      <option value="khmer">Khmer</option>
+                      <option value="foreign">Foreign</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">National ID Number</label>
+                    <input
+                      type="text"
+                      name="national_id_number"
+                      value={formData.national_id_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">NSSF Number</label>
+                    <input
+                      type="text"
+                      name="nssf_number"
+                      value={formData.nssf_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Passport Number</label>
+                    <input
+                      type="text"
+                      name="passport_number"
+                      value={formData.passport_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Work Permit Number</label>
+                    <input
+                      type="text"
+                      name="work_permit_number"
+                      value={formData.work_permit_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <h3 className="text-sm font-semibold text-gray-800">Emergency Contact</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_name"
+                      value={formData.emergency_contact_name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_phone"
+                      value={formData.emergency_contact_phone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Relationship</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_relationship"
+                      value={formData.emergency_contact_relationship}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "documents" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
+                  <p className="text-sm text-gray-500">Upload or update employee documents.</p>
+                </div>
+
+                {documentsNotice ? (
+                  <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800">
+                    {documentsNotice}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">ID Card</label>
+                    {documents?.id_card_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.id_card_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("id_card", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Contract</label>
+                    {documents?.contract_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.contract_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("contract", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">CV</label>
+                    {documents?.cv_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.cv_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("cv", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Certificate</label>
+                    {documents?.certificate_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.certificate_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("certificate", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDocumentsUpload}
+                    disabled={documentsUploading || !hasSelectedDocuments}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+                  >
+                    {documentsUploading ? "Uploading..." : "Upload / Update"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentFiles({})}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 text-sm"
+                  >
+                    Clear selection
+                  </button>
                 </div>
               </div>
             )}

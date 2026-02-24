@@ -17,6 +17,17 @@ interface Employee {
   position: string;
   status: string;
   employee_code: string;
+  photo_url?: string | null;
+  avatar_url?: string | null;
+  profile_photo_url?: string | null;
+  image_url?: string | null;
+  photo?: string | null;
+  avatar?: string | null;
+  user?: {
+    photo_url?: string | null;
+    avatar_url?: string | null;
+    profile_photo_url?: string | null;
+  } | null;
 }
 
 export default function EmployeesPage() {
@@ -26,6 +37,38 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
+  const [brokenPhotos, setBrokenPhotos] = useState<Record<number, boolean>>({});
+
+  const getApiErrorMessage = (err: unknown, fallback: string) => {
+    const msg =
+      (err as any)?.response?.data?.message ||
+      (err as any)?.message;
+    return typeof msg === "string" && msg.trim() ? msg : fallback;
+  };
+
+  const resolveEmployeePhotoUrl = (emp: Employee): string | null => {
+    const raw =
+      emp.photo_url ||
+      emp.avatar_url ||
+      emp.profile_photo_url ||
+      emp.image_url ||
+      emp.photo ||
+      emp.avatar ||
+      emp.user?.photo_url ||
+      emp.user?.avatar_url ||
+      emp.user?.profile_photo_url;
+
+    if (!raw) return null;
+    const url = String(raw).trim();
+    if (!url) return null;
+    if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+    if (/^(https?:)?\/\//i.test(url)) return url;
+
+    const base = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+    if (!base) return url;
+    if (url.startsWith("/")) return `${base}${url}`;
+    return `${base}/${url}`;
+  };
 
   useEffect(() => {
     const token = getToken();
@@ -82,9 +125,25 @@ export default function EmployeesPage() {
     try {
       await api.delete(`/api/v1/employees/${id}`);
       setEmployees((prev) => prev.filter((emp) => emp.id !== id));
-    } catch (err) {
-      setError("Failed to delete employee");
-      console.error(err);
+    } catch (err: unknown) {
+      try {
+        // Fallback for backends that expect method override.
+        await api.post(`/api/v1/employees/${id}`, { _method: "DELETE" });
+        setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+        return;
+      } catch (overrideErr: unknown) {
+        try {
+          // Additional fallback used in some Laravel projects.
+          await api.post(`/api/v1/employees/${id}/delete`);
+          setEmployees((prev) => prev.filter((emp) => emp.id !== id));
+          return;
+        } catch (finalErr: unknown) {
+          setError(getApiErrorMessage(finalErr, getApiErrorMessage(overrideErr, getApiErrorMessage(err, "Failed to delete employee"))));
+          console.error(err);
+          console.error(overrideErr);
+          console.error(finalErr);
+        }
+      }
     }
   };
 
@@ -194,9 +253,32 @@ export default function EmployeesPage() {
                       <tr key={emp.id} className="hover:bg-gray-50/80 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold text-sm shadow-sm">
-                              {emp.first_name?.[0]}{emp.last_name?.[0]}
-                            </div>
+                            {(() => {
+                              const photoUrl = resolveEmployeePhotoUrl(emp);
+                              const initials = `${emp.first_name?.[0] ?? ""}${emp.last_name?.[0] ?? ""}`
+                                .trim()
+                                .toUpperCase() || "?";
+                              const showPhoto = Boolean(photoUrl) && !brokenPhotos[emp.id];
+                              return (
+                                <div className="w-10 h-10 rounded-full shadow-sm overflow-hidden bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                  {showPhoto ? (
+                                    <img
+                                      src={photoUrl as string}
+                                      alt={`${emp.first_name || ""} ${emp.last_name || ""}`.trim() || "Employee photo"}
+                                      className="w-full h-full object-cover"
+                                      onError={() =>
+                                        setBrokenPhotos((prev) => ({
+                                          ...prev,
+                                          [emp.id]: true,
+                                        }))
+                                      }
+                                    />
+                                  ) : (
+                                    <span className="text-blue-700 font-bold text-sm">{initials}</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             <div>
                               <Link href={`/employees/${emp.id}`} className="font-medium text-gray-900 hover:text-blue-600 transition-colors">
                                 {emp.first_name} {emp.last_name}

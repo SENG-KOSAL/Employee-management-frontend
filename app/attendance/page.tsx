@@ -57,7 +57,14 @@ export default function AttendancePage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const normalizedRole = (user?.role || "").toLowerCase();
-  const isAdminOrHr = normalizedRole === "admin" || normalizedRole === "hr";
+  const isAdminOrHr =
+    normalizedRole === "admin" ||
+    normalizedRole === "hr" ||
+    normalizedRole === "company_admin" ||
+    normalizedRole === "super_admin" ||
+    normalizedRole === "super-admin" ||
+    normalizedRole === "superadmin" ||
+    normalizedRole === "developer";
   const isEmployee = normalizedRole === "employee";
 
   const employeeLookup = useMemo(() => {
@@ -452,8 +459,8 @@ export default function AttendancePage() {
         )}
 
         {/* Clock In/Out Card */}
-        <div className="relative overflow-hidden bg-linear-to-br from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-8 sm:p-10">
-          {/* Decorative circles */}
+        {/* <div className="relative overflow-hidden bg-linear-to-br from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-8 sm:p-10">
+          
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl"></div>
           
@@ -514,7 +521,7 @@ export default function AttendancePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Admin & Filters Container */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -522,7 +529,7 @@ export default function AttendancePage() {
           {isAdminOrHr && (
             <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">Manual Entry</h3>
+                <h3 className="text-lg font-bold text-gray-900">Manual dfdEntry</h3>
                 <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">Admin Only</span>
               </div>
               

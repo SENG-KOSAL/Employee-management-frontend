@@ -10,9 +10,10 @@ import { leaveTypesService } from "@/services/leaveTypes";
 import { overtimesService } from "@/services/overtimes";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock, Check, X, KeyRound } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock, Check, X, KeyRound, Shield, FileText } from "lucide-react";
 import { workSchedulesService } from "@/services/workSchedules";
 import type { LeaveType } from "@/types/hr";
+import EmployeePhotoUploader from "@/components/employees/EmployeePhotoUploader";
 
 interface CatalogItem {
   id?: number | string;
@@ -33,6 +34,27 @@ interface EmployeeDetail {
   position?: string;
   status?: string;
   employee_code?: string;
+  // Legal
+  national_id_number?: string | null;
+  nssf_number?: string | null;
+  passport_number?: string | null;
+  work_permit_number?: string | null;
+  nationality?: "khmer" | "foreign" | string | null;
+  // Emergency contact
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relationship?: string | null;
+  // Documents relation (optional)
+  documents?: {
+    id_card_file_path?: string | null;
+    contract_file_path?: string | null;
+    cv_file_path?: string | null;
+    certificate_file_path?: string | null;
+  } | null;
+  photo_url?: string | null;
+  photo?: string | null;
+  avatar_url?: string | null;
+  avatar?: string | null;
   gender?: string;
   date_of_birth?: string;
   address?: string;
@@ -49,11 +71,13 @@ interface EmployeeDetail {
   work_schedule?: { id: number; name: string; working_days?: string[]; hours_per_day?: number; notes?: string | null; effective_from?: string | null };
 }
 
-type TabType = "personal" | "account" | "benefits" | "attendance" | "work-schedule";
+type TabType = "personal" | "account" | "legal" | "documents" | "benefits" | "attendance" | "work-schedule";
 
 const tabs: { id: TabType; label: string; icon: any }[] = [
   { id: "personal", label: "Personal Info", icon: User },
   { id: "account", label: "User Account", icon: Lock },
+  { id: "legal", label: "Legal & Emergency", icon: Shield },
+  { id: "documents", label: "Documents", icon: FileText },
   { id: "benefits", label: "Benefits & Deductions", icon: Gift },
   { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
   { id: "work-schedule", label: "Work Schedule", icon: Clock },
@@ -67,6 +91,8 @@ export default function EmployeeDetailPage() {
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [limitedView, setLimitedView] = useState(false);
+  const [limitedViewMessage, setLimitedViewMessage] = useState<string>("");
   const [allocations, setAllocations] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("personal");
   const [availableBenefits, setAvailableBenefits] = useState<CatalogItem[]>([]);
@@ -126,6 +152,40 @@ export default function EmployeeDetailPage() {
   const [savingAccount, setSavingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [accountSuccess, setAccountSuccess] = useState("");
+
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+  const extractPhotoUrl = (obj: unknown): string | null => {
+    if (!obj || typeof obj !== "object") return null;
+    const rec = obj as Record<string, unknown>;
+    const raw =
+      rec.photo_url ??
+      rec.photoUrl ??
+      rec.photo ??
+      rec.avatar_url ??
+      rec.avatar ??
+      rec.profile_photo_url ??
+      rec.profile_image_url ??
+      rec.image_url ??
+      rec.image ??
+      null;
+    if (raw === null || raw === undefined) return null;
+    const url = String(raw);
+    if (url.startsWith("/") && apiBase) return `${apiBase.replace(/\/$/, "")}${url}`;
+    return url;
+  };
+
+  const resolveFileUrl = (raw?: string | null): string | null => {
+    if (!raw) return null;
+    const url = String(raw).trim();
+    if (!url) return null;
+    if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+    if (/^(https?:)?\/\//i.test(url)) return url;
+
+    const base = apiBase ? apiBase.replace(/\/$/, "") : "";
+    if (!base) return url;
+    if (url.startsWith("/")) return `${base}${url}`;
+    return `${base}/${url}`;
+  };
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -381,6 +441,8 @@ export default function EmployeeDetailPage() {
   const fetchEmployee = async (empId: string | number) => {
     try {
       setLoading(true);
+      setLimitedView(false);
+      setLimitedViewMessage("");
       const empRes = await api.get(`/api/v1/employees/${empId}`);
       const empData = empRes.data.data || empRes.data;
       setEmployee(empData);
@@ -402,7 +464,33 @@ export default function EmployeeDetailPage() {
       setError("");
     } catch (err) {
       console.error(err);
-      setError("Failed to load employee details");
+      const status = (err as any)?.response?.status as number | undefined;
+      const message = (err as any)?.response?.data?.message as string | undefined;
+
+      // If backend forbids /employees/:id for some roles (e.g. company_admin),
+      // or tenant-scoped model binding returns 404, fall back to list endpoint.
+      if (status === 403 || status === 404) {
+        try {
+          const listRes = await api.get("/api/v1/employees?per_page=500");
+          const listData = (listRes as any)?.data?.data ?? (listRes as any)?.data;
+          const rows = Array.isArray(listData) ? listData : Array.isArray(listData?.data) ? listData.data : [];
+          const found = rows.find((e: any) => String(e?.id) === String(empId));
+          if (found) {
+            setEmployee(found);
+            setActiveTab("personal");
+            setLimitedView(true);
+            setLimitedViewMessage(
+              message || "Limited view: you don't have permission to access the full employee profile."
+            );
+            setError("");
+            return;
+          }
+        } catch (fallbackErr) {
+          console.error(fallbackErr);
+        }
+      }
+
+      setError(message || (status === 403 ? "You don't have permission to view this employee." : "Failed to load employee details"));
     } finally {
       setLoading(false);
     }
@@ -927,12 +1015,37 @@ export default function EmployeeDetailPage() {
 
         {employee && (
           <div className="space-y-6">
+            {limitedView && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
+                {limitedViewMessage || "Limited view: some employee details are not available for your role."}
+              </div>
+            )}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-lg font-semibold">
-                    {employee.first_name?.[0]?.toUpperCase() || "E"}
-                  </div>
+                  {!limitedView ? (
+                    <EmployeePhotoUploader
+                      employeeId={employee.id}
+                      photoUrl={extractPhotoUrl(employee)}
+                      onUploaded={(payload) => {
+                        const nextUrl = extractPhotoUrl(payload);
+                        setEmployee((prev) => {
+                          if (!prev) return prev;
+                          const nextObj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+                          const merged: EmployeeDetail = {
+                            ...prev,
+                            ...(nextObj as Partial<EmployeeDetail>),
+                          };
+                          if (nextUrl) merged.photo_url = nextUrl;
+                          return merged;
+                        });
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold">
+                      {`${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`.trim().toUpperCase() || "?"}
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">
                       {employee.first_name} {employee.last_name}
@@ -946,7 +1059,7 @@ export default function EmployeeDetailPage() {
               </div>
 
               <div className="flex gap-0 border-b border-gray-200">
-                {tabs.map((tab) => {
+                {(limitedView ? tabs.filter((t) => t.id === "personal") : tabs).map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
@@ -970,12 +1083,14 @@ export default function EmployeeDetailPage() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-800">Personal & Employment</h3>
-                      <Link
-                        href={`/employees/${id}/edit`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
-                      >
-                        Edit
-                      </Link>
+                      {!limitedView && (
+                        <Link
+                          href={`/employees/${id}/edit`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                        >
+                          Edit
+                        </Link>
+                      )}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="flex items-center gap-2 text-gray-700"><Mail className="w-4 h-4" /> {employee.email}</div>
@@ -1577,6 +1692,111 @@ export default function EmployeeDetailPage() {
                         ) : (
                           <p className="text-xs text-gray-500">No history found.</p>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "legal" && (
+                  <div className="space-y-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Legal & Emergency</h3>
+                      <Link
+                        href={`/employees/${id}/edit`}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                      >
+                        Edit
+                      </Link>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                        <p className="text-xs font-semibold text-gray-600 uppercase">Legal</p>
+                        <div className="grid gap-2">
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Nationality</span>
+                            <span className="text-gray-900 font-medium">{employee.nationality || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">National ID</span>
+                            <span className="text-gray-900 font-medium">{employee.national_id_number || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">NSSF Number</span>
+                            <span className="text-gray-900 font-medium">{employee.nssf_number || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Passport Number</span>
+                            <span className="text-gray-900 font-medium">{employee.passport_number || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Work Permit</span>
+                            <span className="text-gray-900 font-medium">{employee.work_permit_number || "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                        <p className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</p>
+                        <div className="grid gap-2">
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Name</span>
+                            <span className="text-gray-900 font-medium">{employee.emergency_contact_name || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Phone</span>
+                            <span className="text-gray-900 font-medium">{employee.emergency_contact_phone || "-"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-gray-600">Relationship</span>
+                            <span className="text-gray-900 font-medium">{employee.emergency_contact_relationship || "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "documents" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-800">Employee Documents</h3>
+                      <span className="text-xs text-gray-500">(Read-only)</span>
+                    </div>
+
+                    <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                      <div className="grid gap-3">
+                        {(
+                          [
+                            { key: "id_card_file_path", label: "ID Card" },
+                            { key: "contract_file_path", label: "Contract" },
+                            { key: "cv_file_path", label: "CV" },
+                            { key: "certificate_file_path", label: "Certificate" },
+                          ] as const
+                        ).map((item) => {
+                          const rawPath = employee.documents?.[item.key] ?? null;
+                          const url = resolveFileUrl(rawPath);
+                          return (
+                            <div key={item.key} className="flex items-center justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                                <p className="text-xs text-gray-500 truncate" title={rawPath || ""}>{rawPath || "-"}</p>
+                              </div>
+                              {url ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  Open
+                                </a>
+                              ) : (
+                                <span className="text-xs text-gray-400">No file</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

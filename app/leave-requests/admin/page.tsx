@@ -51,7 +51,9 @@ export default function AdminLeaveAssignPage() {
     try {
       const res = await api.get("/api/v1/me");
       const me = res.data?.data ?? res.data;
-      if (me?.role !== "admin" && me?.role !== "hr") {
+      const role = String(me?.role || "").toLowerCase();
+      const allowed = ["admin", "hr", "super_admin", "super-admin", "superadmin", "developer"].includes(role);
+      if (!allowed) {
         router.push("/leave-requests");
       }
     } catch (err) {

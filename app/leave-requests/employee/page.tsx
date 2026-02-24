@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
+import { EmployeeSidebar } from "@/components/layout/EmployeeSidebar";
 import { leaveRequestsService } from "@/services/leaveRequests";
 import { leaveTypesService } from "@/services/leaveTypes";
 import api from "@/services/api";
-import { getToken } from "@/utils/auth";
+import { getMe, getToken, saveMe } from "@/utils/auth";
 import { CalendarClock, Send, Loader2 } from "lucide-react";
 
 interface LeaveType {
@@ -15,9 +15,15 @@ interface LeaveType {
   is_paid?: boolean;
 }
 
+type MePayload = {
+  employee?: {
+    id?: number;
+  } | null;
+} | null;
+
 export default function EmployeeLeaveRequestPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<MePayload>(() => getMe<MePayload>() || null);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveTypeId, setLeaveTypeId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -39,13 +45,15 @@ export default function EmployeeLeaveRequestPage() {
 
   const loadUser = async () => {
     try {
-      const res = await api.get("/api/v1/me");
-      const data = res.data?.data ?? res.data;
-      if (data?.role !== "employee") {
-        router.push("/leave-requests");
+      const cached = getMe();
+      if (cached) {
+        setUser(cached);
         return;
       }
+      const res = await api.get("/api/v1/me");
+      const data = res.data?.data ?? res.data;
       setUser(data);
+      saveMe(data);
     } catch (err) {
       console.error(err);
       router.push("/auth/login");
@@ -55,8 +63,18 @@ export default function EmployeeLeaveRequestPage() {
   const loadLeaveTypes = async () => {
     try {
       const res = await leaveTypesService.list();
-      const items = (res as any)?.data?.data ?? (res as any)?.data ?? [];
-      setLeaveTypes(Array.isArray(items) ? items : []);
+      const raw = res as unknown;
+      const items =
+        typeof raw === "object" && raw && "data" in raw
+          ? ((raw as { data?: unknown }).data as unknown)
+          : raw;
+
+      const list =
+        typeof items === "object" && items && "data" in items
+          ? ((items as { data?: unknown }).data as unknown)
+          : items;
+
+      setLeaveTypes(Array.isArray(list) ? (list as LeaveType[]) : []);
     } catch (err) {
       console.error(err);
       setLeaveTypes([]);
@@ -91,16 +109,20 @@ export default function EmployeeLeaveRequestPage() {
       setEndDate("");
       setReason("");
       setTimeout(() => setSuccess(""), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err?.response?.data?.message || "Failed to submit request");
+      const message =
+        typeof err === "object" && err && "response" in err
+          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message as string | undefined)
+          : undefined;
+      setError(message || "Failed to submit request");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <HRMSSidebar>
+    <EmployeeSidebar>
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-50 text-blue-700 rounded-lg">
@@ -179,6 +201,6 @@ export default function EmployeeLeaveRequestPage() {
           </form>
         </div>
       </div>
-    </HRMSSidebar>
+    </EmployeeSidebar>
   );
 }

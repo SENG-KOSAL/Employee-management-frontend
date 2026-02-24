@@ -10,7 +10,41 @@ export interface ActivityItem {
   icon: string;
 }
 
-export function useRecentActivity(limit = 8) {
+const STORAGE_KEY = "hrms.recentActivity.v1";
+
+type StoredActivity = {
+  ts: number;
+  value: ActivityItem[];
+};
+
+const readStored = (): StoredActivity | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const rec = parsed as Record<string, unknown>;
+    if (typeof rec.ts !== "number" || !Array.isArray(rec.value)) return null;
+    return { ts: rec.ts, value: rec.value as ActivityItem[] };
+  } catch {
+    return null;
+  }
+};
+
+const writeStored = (value: ActivityItem[]) => {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: StoredActivity = { ts: Date.now(), value };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+};
+
+const isFresh = (ts: number, ttlMs: number) => Date.now() - ts < ttlMs;
+
+export function useRecentActivity(limit = 8, refreshInterval = 0, ttlMs = 5 * 60 * 1000) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,7 +87,9 @@ export function useRecentActivity(limit = 8) {
 
       // Sort by timestamp descending
       items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setActivities(items.slice(0, limit));
+      const sliced = items.slice(0, limit);
+      setActivities(sliced);
+      writeStored(sliced);
       setLoading(false);
     } catch (err) {
       console.error("Failed to fetch activities:", err);
@@ -62,10 +98,19 @@ export function useRecentActivity(limit = 8) {
   }, [limit]);
 
   useEffect(() => {
-    fetchActivities();
-    const interval = setInterval(fetchActivities, 60000); // Refresh every minute
-    return () => clearInterval(interval);
-  }, [fetchActivities]);
+    const stored = readStored();
+    if (stored && isFresh(stored.ts, ttlMs)) {
+      setActivities(stored.value.slice(0, limit));
+      setLoading(false);
+    } else {
+      fetchActivities();
+    }
+
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchActivities, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchActivities, limit, refreshInterval, ttlMs]);
 
   return { activities, loading, refetch: fetchActivities };
 }
