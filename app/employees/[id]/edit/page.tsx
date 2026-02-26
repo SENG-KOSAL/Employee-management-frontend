@@ -1485,25 +1485,34 @@ export default function EditEmployeePage() {
             )}
 
             {activeTab === "benefits" && (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h2 className="text-lg font-semibold text-gray-900">Benefits (flags)</h2>
-                  
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Compensation & Deductions</h3>
+                     <p className="text-sm text-gray-500 mt-1">Manage recurring benefits and tax deductions.</p>
+                  </div>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Catalog Benefits</h3>
-                      <span className="text-xs text-gray-500">Editable</span>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* Benefits Column */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                        <div className="w-8 h-8 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                            <Gift className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Allowances & Benefits</h3>
+                            <p className="text-xs text-gray-500">Add extra compensation</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+
+                    <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 rounded-lg shadow-sm">
                       <select
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0"
                         value={benefitToAdd}
                         onChange={(e) => setBenefitToAdd(e.target.value)}
                       >
-                        <option value="">Select benefit to add</option>
+                        <option value="">Select benefit to add...</option>
                         {availableBenefits.map((b) => (
                           <option key={b.id} value={String(b.id)}>
                             {b.benefit_name || b.name} {b.amount ? `• ${b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}` : ""}
@@ -1514,72 +1523,79 @@ export default function EditEmployeePage() {
                         type="button"
                         disabled={!benefitToAdd || addingBenefit}
                         onClick={addBenefitFromCatalog}
-                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-lg disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
+                        className="px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded-md disabled:opacity-50 hover:bg-green-700 transition-colors shadow-sm"
                       >
                         {addingBenefit ? "Adding..." : "Add"}
                       </button>
                     </div>
-                    {benefitEdits.length ? (
-                      <div className="space-y-2">
-                        {benefitEdits.map((item) => (
-                          <div key={`${item.benefit_name || item.name}-${item.id}`} className="p-3 border border-gray-200 rounded-lg bg-white space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="font-medium text-gray-900">{item.benefit_name || item.name}</p>
-                                <p className="text-xs text-gray-500">Assigned benefit</p>
-                              </div>
-                              <span className={`text-xs px-2 py-1 rounded-full border ${
+
+                    <div className="space-y-3">
+                        {benefitEdits.length ? (
+                        benefitEdits.map((item) => (
+                          <div key={`${item.benefit_name || item.name}-${item.id}`} className="p-4 bg-white border border-green-100 rounded-xl shadow-sm space-y-3 group hover:border-green-200 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">{item.benefit_name || item.name}</span>
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
                                 item.type === "percentage"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-green-50 text-green-700 border-green-200"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-green-50 text-green-700 border-green-100"
                               }`}>
-                                {item.type === "percentage" ? "Percent" : "Fixed"}
+                                {item.type === "percentage" ? "% Rate" : "Fixed Amt"}
                               </span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Value</label>
                                 <input
                                   type="number"
                                   value={Number(item.amount ?? 0)}
                                   onChange={(e) => updateBenefitEdit(item.id, "amount", e.target.value)}
                                   min={0}
                                   step="0.01"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm font-medium focus:ring-1 focus:ring-green-500 focus:border-green-500 active:bg-white focus:bg-white transition-all text-right"
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Type</label>
                                 <select
                                   value={item.type === "percentage" ? "percentage" : "fixed"}
                                   onChange={(e) => updateBenefitEdit(item.id, "type", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 focus:ring-1 focus:ring-green-500 focus:border-green-500"
                                 >
-                                  <option value="fixed">Fixed</option>
-                                  <option value="percentage">Percent</option>
+                                  <option value="fixed">Fixed ($)</option>
+                                  <option value="percentage">Percent (%)</option>
                                 </select>
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500">No catalog benefits assigned.</p>
-                    )}
+                        ))
+                        ) : (
+                           <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                                <p className="text-xs text-gray-400 font-medium">No active benefits</p>
+                           </div>
+                        )}
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Catalog Deductions</h3>
-                      <span className="text-xs text-gray-500">Editable</span>
+                  {/* Deductions Column */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                     <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                        <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+                            <Shield className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Tax & Deductions</h3>
+                            <p className="text-xs text-gray-500">Manage withholdings</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+
+                    <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 rounded-lg shadow-sm">
                       <select
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0"
                         value={deductionToAdd}
                         onChange={(e) => setDeductionToAdd(e.target.value)}
                       >
-                        <option value="">Select deduction to add</option>
+                        <option value="">Select deduction to add...</option>
                         {availableDeductions.map((d) => (
                           <option key={d.id} value={String(d.id)}>
                             {d.deduction_name || d.name} {d.amount ? `• ${d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}` : ""}
@@ -1590,168 +1606,161 @@ export default function EditEmployeePage() {
                         type="button"
                         disabled={!deductionToAdd || addingDeduction}
                         onClick={addDeductionFromCatalog}
-                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-lg disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
+                        className="px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-md disabled:opacity-50 hover:bg-red-700 transition-colors shadow-sm"
                       >
-                        {addingDeduction ? "Adding..." : "Add"}
+                         {addingDeduction ? "Adding..." : "Add"}
                       </button>
                     </div>
-                    {deductionEdits.length ? (
-                      <div className="space-y-2">
-                        {deductionEdits.map((item) => (
-                          <div key={`${item.deduction_name || item.name}-${item.id}`} className="p-3 border border-gray-200 rounded-lg bg-white space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="font-medium text-gray-900">{item.deduction_name || item.name}</p>
-                                <p className="text-xs text-gray-500">Assigned deduction</p>
-                              </div>
-                              <span className={`text-xs px-2 py-1 rounded-full border ${
+
+                    <div className="space-y-3">
+                         {deductionEdits.length ? (
+                        deductionEdits.map((item) => (
+                           <div key={`${item.deduction_name || item.name}-${item.id}`} className="p-4 bg-white border border-red-100 rounded-xl shadow-sm space-y-3 group hover:border-red-200 transition-colors">
+                             <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">{item.deduction_name || item.name}</span>
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
                                 item.type === "percentage"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-green-50 text-green-700 border-green-200"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-red-50 text-red-700 border-red-100"
                               }`}>
-                                {item.type === "percentage" ? "Percent" : "Fixed"}
+                                {item.type === "percentage" ? "% Rate" : "Fixed Amt"}
                               </span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Amount</label>
                                 <input
                                   type="number"
                                   value={Number(item.amount ?? 0)}
                                   onChange={(e) => updateDeductionEdit(item.id, "amount", e.target.value)}
                                   min={0}
                                   step="0.01"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm font-medium focus:ring-1 focus:ring-red-500 focus:border-red-500 active:bg-white focus:bg-white transition-all text-right"
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Type</label>
                                 <select
                                   value={item.type === "percentage" ? "percentage" : "fixed"}
                                   onChange={(e) => updateDeductionEdit(item.id, "type", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 focus:ring-1 focus:ring-red-500 focus:border-red-500"
                                 >
-                                  <option value="fixed">Fixed</option>
-                                  <option value="percentage">Percent</option>
+                                  <option value="fixed">Fixed ($)</option>
+                                  <option value="percentage">Percent (%)</option>
                                 </select>
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500">No catalog deductions assigned.</p>
-                    )}
+                        ))
+                         ) : (
+                           <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                                <p className="text-xs text-gray-400 font-medium">No active deductions</p>
+                           </div>
+                         )}
+                    </div>
                   </div>
                 </div>
-
-                
               </div>
             )}
 
             {activeTab === "attendance" && (
-              <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-gray-900">Attendance & Leave</h2>
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                  Manage yearly leave allocations per employee. Assign, edit days, or remove allocations as needed.
-                </div>
-
-                {allocError ? <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{allocError}</div> : null}
-
-                <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-gray-800">Assign new allocation</h3>
-                    {allocLoading ? <span className="text-xs text-gray-500">Working...</span> : null}
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Leave Management</h3>
+                     <p className="text-sm text-gray-500 mt-1">Allocate annual leave quotas.</p>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Leave type</label>
-                      <select
-                        name="leave_type_id"
-                        value={allocationForm.leave_type_id}
-                        onChange={handleAllocationFormChange}
-                        className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select leave type</option>
-                        {leaveTypes.map((lt) => (
-                          <option key={lt.id} value={lt.id}>
-                            {lt.name} {lt.is_paid ? "(paid)" : "(unpaid)"} • {lt.default_days ?? lt.days_per_year ?? "-"} days/year
-                          </option>
-                        ))}
-                      </select>
-                      {leaveTypesLoading ? <p className="text-xs text-gray-500">Loading leave types...</p> : null}
-                      {leaveTypesError ? <p className="text-xs text-red-600">{leaveTypesError}</p> : null}
-                      {allocationForm.leave_type_id ? (
-                        <p className="text-xs text-gray-500">Default days: {getDefaultDaysForLeaveType(allocationForm.leave_type_id)}</p>
-                      ) : null}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Year</label>
-                      <input
-                        type="number"
-                        name="year"
-                        value={allocationForm.year}
-                        onChange={handleAllocationFormChange}
-                        className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        min={2000}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Days allocated</label>
-                      <input
-                        type="number"
-                        name="days_allocated"
-                        value={allocationForm.days_allocated}
-                        onChange={handleAllocationFormChange}
-                        className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        min={0}
-                        step={1}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Days used (optional)</label>
-                      <input
-                        type="number"
-                        name="days_used"
-                        value={allocationForm.days_used}
-                        onChange={handleAllocationFormChange}
-                        className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        min={0}
-                        step={1}
-                      />
-                    </div>
-                    <div className="space-y-1 md:col-span-2 lg:col-span-3">
-                      <label className="block text-sm font-medium text-gray-700">Note (optional)</label>
-                      <textarea
-                        name="note"
-                        value={allocationForm.note}
-                        onChange={handleAllocationFormChange}
-                        rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="e.g., default annual allocation"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={addAllocation}
-                      disabled={allocLoading}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
-                    >
-                      {allocLoading ? "Saving..." : "Assign allocation"}
-                    </button>
+                   <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium border border-blue-100">
+                     Annual Cycle
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-gray-800">Existing allocations</h3>
-                    {allocLoading ? <span className="text-xs text-gray-500">Updating...</span> : null}
-                  </div>
+                {/* Allocation Form */}
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-5">
+                   <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <CalendarClock className="w-4 h-4" />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-900">New Allocation</h3>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="lg:col-span-2 group">
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Leave Type</label>
+                             <select
+                                name="leave_type_id"
+                                value={allocationForm.leave_type_id}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                            >
+                                <option value="">Select leave type...</option>
+                                {leaveTypes.map((lt) => (
+                                <option key={lt.id} value={lt.id}>
+                                    {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"} • {lt.default_days ?? lt.days_per_year ?? "-"} days
+                                </option>
+                                ))}
+                            </select>
+                            {allocationForm.leave_type_id && (
+                                <p className="text-xs text-blue-600 mt-1.5 font-medium">Default: {getDefaultDaysForLeaveType(allocationForm.leave_type_id)} days</p>
+                            )}
+                        </div>
+                        
+                        <div className="group">
+                             <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Year</label>
+                            <input
+                                type="number"
+                                name="year"
+                                value={allocationForm.year}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                                min={2000}
+                             />
+                        </div>
+                        
+                        <div className="group">
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Days</label>
+                            <input
+                                type="number"
+                                name="days_allocated"
+                                value={allocationForm.days_allocated}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-bold text-blue-900"
+                                min={0}
+                                step={1}
+                                required
+                            />
+                        </div>
+
+                         <div className="lg:col-span-4 flex items-end justify-between gap-4">
+                             <div className="flex-1 group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Note <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                                <input
+                                    type="text"
+                                    name="note"
+                                    value={allocationForm.note}
+                                    onChange={handleAllocationFormChange}
+                                    className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                                    placeholder="e.g. Annual quota"
+                                />
+                             </div>
+                            <button
+                                type="button"
+                                onClick={addAllocation}
+                                disabled={allocLoading}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm hover:shadow-md disabled:opacity-50 font-medium transition-all"
+                            >
+                                {allocLoading ? "Assigning..." : "Assign Allocation"}
+                            </button>
+                         </div>
+                   </div>
+                </div>
+
+                {/* Existing Allocations */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2">Allocation History</h3>
+                  
                   {allocations.length ? (
-                    <div className="space-y-3">
+                    <div className="grid gap-4">
                       {allocations.map((alloc) => {
                         const draft = allocationEdits[alloc.id] || {
                           leave_type_id: Number(alloc.leave_type_id),
@@ -1763,192 +1772,217 @@ export default function EditEmployeePage() {
                         return (
                           <div
                             key={alloc.id}
-                            className="p-4 border border-gray-200 rounded-lg bg-white space-y-3"
+                            className="p-5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 transition-colors group shadow-sm hover:shadow"
                           >
-                            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-                              <div className="space-y-1">
-                                <label className="block text-xs font-medium text-gray-600">Leave type</label>
-                                <select
-                                  value={draft.leave_type_id}
-                                  onChange={(e) => handleAllocationEditChange(alloc.id, "leave_type_id", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                >
-                                  {leaveTypes.map((lt) => (
-                                    <option key={lt.id} value={lt.id}>
-                                      {lt.name} {lt.is_paid ? "(paid)" : "(unpaid)"}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="block text-xs font-medium text-gray-600">Year</label>
-                                <input
-                                  type="number"
-                                  value={draft.year}
-                                  onChange={(e) => handleAllocationEditChange(alloc.id, "year", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  min={2000}
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="block text-xs font-medium text-gray-600">Days allocated</label>
-                                <input
-                                  type="number"
-                                  value={draft.days_allocated}
-                                  onChange={(e) => handleAllocationEditChange(alloc.id, "days_allocated", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  min={0}
-                                  step={1}
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="block text-xs font-medium text-gray-600">Days used</label>
-                                <input
-                                  type="number"
-                                  value={draft.days_used}
-                                  onChange={(e) => handleAllocationEditChange(alloc.id, "days_used", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  min={0}
-                                  step={1}
-                                />
-                              </div>
-                              <div className="space-y-1 lg:col-span-1">
-                                <label className="block text-xs font-medium text-gray-600">Note</label>
-                                <input
-                                  type="text"
-                                  value={draft.note ?? ""}
-                                  onChange={(e) => handleAllocationEditChange(alloc.id, "note", e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder="Optional note"
-                                />
-                              </div>
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs">
+                                        {draft.year}
+                                    </div>
+                                    <div>
+                                         <h4 className="text-sm font-bold text-gray-900">
+                                            {leaveTypes.find(lt => lt.id === draft.leave_type_id)?.name || "Unknown Type"}
+                                         </h4>
+                                         <p className="text-xs text-gray-500">
+                                            Used <span className="font-semibold text-gray-900">{draft.days_used}</span> of <span className="font-semibold text-gray-900">{draft.days_allocated}</span> days
+                                         </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                    type="button"
+                                    onClick={() => deleteAllocation(alloc.id)}
+                                    disabled={allocLoading}
+                                    className="px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-medium border border-red-100"
+                                    >
+                                    Remove
+                                    </button>
+                                     <button
+                                    type="button"
+                                    onClick={() => saveAllocationEdit(alloc.id)}
+                                    disabled={allocLoading}
+                                    className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-md font-medium shadow-sm"
+                                    >
+                                    Save Changes
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>
-                                Year {draft.year} • Used {draft.days_used} / {draft.days_allocated}
-                              </span>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => saveAllocationEdit(alloc.id)}
-                                  disabled={allocLoading}
-                                  className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteAllocation(alloc.id)}
-                                  disabled={allocLoading}
-                                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-                                >
-                                  Remove
-                                </button>
-                              </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Allocated</label>
+                                    <input
+                                        type="number"
+                                        value={draft.days_allocated}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "days_allocated", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm font-semibold text-gray-900 text-center"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Used</label>
+                                    <input
+                                        type="number"
+                                        value={draft.days_used}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "days_used", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm font-medium text-gray-700 text-center"
+                                    />
+                                </div>
+                                 <div className="col-span-2">
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Note</label>
+                                    <input
+                                        type="text"
+                                        value={draft.note ?? ""}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "note", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm text-gray-600"
+                                        placeholder="Add note..."
+                                    />
+                                </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">No leave allocations yet. Add one above.</p>
+                    <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <CalendarClock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                        <p className="text-sm text-gray-500">No leave allocations found for this employee.</p>
+                    </div>
                   )}
                 </div>
               </div>
             )}
 
             {activeTab === "work-schedule" && (
-              <div className="space-y-5">
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Work Schedule</h2>
-                    <p className="text-sm text-gray-500">Assign or change the employee's work schedule and effective date.</p>
+                    <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Work Schedule</h3>
+                    <p className="text-sm text-gray-500 mt-1">Manage working hours and shifts.</p>
                   </div>
-                  <Link href="/settings/work-schedules" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    Manage Schedules
+                  <Link href="/settings/work-schedules" className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 transition-colors">
+                    Configure Schedules <Clock className="w-3 h-3" />
                   </Link>
                 </div>
 
-                <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                  <div className="flex flex-wrap gap-3 items-end">
-                    <div className="min-w-56 flex-1">
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Select Schedule</label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                        value={selectedScheduleId}
-                        onChange={(e) => setSelectedScheduleId(e.target.value)}
-                        disabled={schedulesLoading}
-                      >
-                        <option value="">Choose schedule</option>
-                        {schedules.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} • {s.hours_per_day}h/day
-                          </option>
-                        ))}
-                      </select>
-                      {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
-                    </div>
-                    <div className="min-w-40">
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
-                      <input
-                        type="date"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                        value={scheduleEffectiveFrom}
-                        onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAssignSchedule}
-                      disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-md shadow-sm hover:from-blue-700 hover:to-indigo-700 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {assigningSchedule ? "Assigning..." : "Assign"}
-                    </button>
-                  </div>
-                  {scheduleAssignError && <p className="text-sm text-red-600">{scheduleAssignError}</p>}
-                  {scheduleAssignSuccess && <p className="text-sm text-green-600">{scheduleAssignSuccess}</p>}
-                  <p className="text-xs text-gray-500">Effective date is required when assigning a schedule.</p>
-                </div>
+                <div className="grid gap-6 lg:grid-cols-3">
+                    {/* Assignment Card */}
+                    <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                                <Clock className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">Assign Schedule</h3>
+                                <p className="text-xs text-gray-500">Update working pattern effective from a date.</p>
+                            </div>
+                        </div>
 
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
-                  <p className="text-xs font-semibold text-gray-600 uppercase">Current Schedule</p>
-                  {currentSchedule ? (
-                    <div className="space-y-1 text-sm text-gray-800">
-                      <p className="font-medium text-gray-900">{currentSchedule.name}</p>
-                      <p>{currentSchedule.hours_per_day ?? "-"} hours per day</p>
-                      {currentSchedule.effective_from ? (
-                        <p>Effective from: {currentSchedule.effective_from}</p>
-                      ) : null}
-                      <div className="flex flex-wrap gap-2">
-                        {(currentSchedule.working_days || []).map((d: string) => (
-                          <span key={d} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                            {d.toUpperCase()}
-                          </span>
-                        ))}
-                      </div>
-                      {currentSchedule.notes ? <p className="text-sm text-gray-600">{currentSchedule.notes}</p> : null}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Schedule Template</label>
+                                <select
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                                    value={selectedScheduleId}
+                                    onChange={(e) => setSelectedScheduleId(e.target.value)}
+                                    disabled={schedulesLoading}
+                                >
+                                    <option value="">Select a schedule template...</option>
+                                    {schedules.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name} • {s.hours_per_day}h / day
+                                    </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Effective Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all"
+                                    value={scheduleEffectiveFrom}
+                                    onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                                />
+                            </div>
+                            
+                            <div className="md:col-span-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleAssignSchedule}
+                                    disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
+                                    className="w-full py-2.5 bg-indigo-600 text-white font-semibold rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    {assigningSchedule ? "Updating Schedule..." : "Confirm Schedule Assignment"}
+                                </button>
+                                {scheduleAssignError && <p className="text-sm text-red-600 mt-2 text-center bg-red-50 py-1 rounded">{scheduleAssignError}</p>}
+                                {scheduleAssignSuccess && <p className="text-sm text-green-600 mt-2 text-center bg-green-50 py-1 rounded">{scheduleAssignSuccess}</p>}
+                            </div>
+                        </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No schedule assigned yet.</p>
-                  )}
+
+                    {/* Current Schedule Card */}
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-6">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Active Configuration</h4>
+                         {currentSchedule ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="text-2xl font-bold text-gray-900 mb-1">{currentSchedule.name}</div>
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-gray-200 shadow-sm text-xs font-medium text-gray-700">
+                                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                        {currentSchedule.hours_per_day ?? "-"} Hours / Day
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase">Working Days</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(currentSchedule.working_days || []).map((d: string) => (
+                                        <span key={d} className="px-2 py-1 rounded-md text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                            {d.substring(0, 3)}
+                                        </span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {currentSchedule.effective_from && (
+                                     <div className="pt-4 border-t border-gray-200">
+                                        <p className="text-xs text-gray-500">Effective Since</p>
+                                        <p className="text-sm font-medium text-gray-900">{new Date(currentSchedule.effective_from).toLocaleDateString()}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+                                <Clock className="w-8 h-8 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-500">No schedule assigned</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
               </div>
             )}
 
-            <div className="flex gap-3 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-100 mt-2">
               <Link
                 href={id ? `/employees/${id}` : "/employees"}
-                className="flex-1 px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-center"
+                className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                tabIndex={0}
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all shadow-md hover:shadow-lg font-medium"
+                className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {saving ? (
+                    <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                        Saving Changes...
+                    </>
+                ) : (
+                    "Save Changes"
+                )}
               </button>
             </div>
           </form>

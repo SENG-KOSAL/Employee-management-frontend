@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import api from "@/services/api";
 import { benefitsService } from "@/services/benefits";
 import { leaveAllocationsService } from "@/services/leaveAllocations";
@@ -10,7 +10,7 @@ import { leaveTypesService } from "@/services/leaveTypes";
 import { overtimesService } from "@/services/overtimes";
 import { getToken } from "@/utils/auth";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
-import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock, Check, X, KeyRound, Shield, FileText } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Badge, Building2, UserCircle2, User, Lock, Gift, CalendarClock, Clock, Check, X, KeyRound, Shield, FileText, Edit2, CreditCard, MapPin, Plus, MinusCircle } from "lucide-react";
 import { workSchedulesService } from "@/services/workSchedules";
 import type { LeaveType } from "@/types/hr";
 import EmployeePhotoUploader from "@/components/employees/EmployeePhotoUploader";
@@ -87,14 +87,16 @@ export default function EmployeeDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = Array.isArray(params?.id) ? params.id[0] : (params as any)?.id;
-
+  const searchParams = useSearchParams();
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [limitedView, setLimitedView] = useState(false);
   const [limitedViewMessage, setLimitedViewMessage] = useState<string>("");
   const [allocations, setAllocations] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<TabType>("personal");
+  const tabParam = searchParams.get("tab");
+  const validTabs: TabType[] = ["personal", "account", "legal", "documents", "benefits", "attendance", "work-schedule"];
+  const [activeTab, setActiveTab] = useState<TabType>((validTabs.includes(tabParam as TabType) ? (tabParam as TabType) : "personal"));
   const [availableBenefits, setAvailableBenefits] = useState<CatalogItem[]>([]);
   const [availableDeductions, setAvailableDeductions] = useState<CatalogItem[]>([]);
   const [assigning, setAssigning] = useState(false);
@@ -746,7 +748,7 @@ export default function EmployeeDetailPage() {
         : "bg-green-50 text-green-700 border-green-200";
 
     return (
-      <div key={`${String(item.id ?? label)}`} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-white">
+      <div key={`${String(item.id ?? label)}`} className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md hover:border-blue-200 transition-all">
         <div>
           <p className="font-medium text-gray-900">{label}</p>
           <p className="text-xs text-gray-500">{item.type === "percentage" ? "Percentage" : "Fixed"} • {amount}</p>
@@ -1002,13 +1004,25 @@ export default function EmployeeDetailPage() {
 
   return (
     <HRMSSidebar>
-      <div className="space-y-6">
-        <Link href="/employees" className="flex items-center gap-2 text-gray-700 hover:text-gray-900">
-          <ArrowLeft className="w-4 h-4" /> Back to Employees
-        </Link>
+      <div className="space-y-6 pb-8 bg-gray-50/50 min-h-screen">
+        {/* Page Header */}
+        <div className="flex items-center justify-between gap-3 bg-white px-6 py-4 rounded-xl shadow-sm border border-gray-100">
+          <Link href="/employees" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors font-medium">
+            <ArrowLeft className="w-4 h-4" /> Back to Team
+          </Link>
+          {employee ? (
+            <Link
+              href={`/employees/${employee.id}/360degree`}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            >
+              360° View
+            </Link>
+          ) : null}
+        </div>
 
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-center gap-2">
+            <X className="w-5 h-5" />
             {error}
           </div>
         )}
@@ -1016,290 +1030,490 @@ export default function EmployeeDetailPage() {
         {employee && (
           <div className="space-y-6">
             {limitedView && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-600" />
                 {limitedViewMessage || "Limited view: some employee details are not available for your role."}
               </div>
             )}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            
+            {/* Employee Banner Card */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-8 py-8 bg-gradient-to-br from-blue-50/50 via-white to-indigo-50/50 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-center gap-6">
                   {!limitedView ? (
-                    <EmployeePhotoUploader
-                      employeeId={employee.id}
-                      photoUrl={extractPhotoUrl(employee)}
-                      onUploaded={(payload) => {
-                        const nextUrl = extractPhotoUrl(payload);
-                        setEmployee((prev) => {
-                          if (!prev) return prev;
-                          const nextObj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-                          const merged: EmployeeDetail = {
-                            ...prev,
-                            ...(nextObj as Partial<EmployeeDetail>),
-                          };
-                          if (nextUrl) merged.photo_url = nextUrl;
-                          return merged;
-                        });
-                      }}
-                    />
+                    <div className="relative group">
+                      <div className="absolute -inset-0.5 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full opacity-30 blur-sm group-hover:opacity-50 transition-opacity"></div>
+                      {/* Removed wrapping div with fixed size constraints */}
+                      <EmployeePhotoUploader
+                        employeeId={employee.id}
+                        photoUrl={extractPhotoUrl(employee)}
+                        onUploaded={(payload) => {
+                          const nextUrl = extractPhotoUrl(payload);
+                          setEmployee((prev) => {
+                            if (!prev) return prev;
+                            const nextObj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+                            const merged: EmployeeDetail = {
+                              ...prev,
+                              ...(nextObj as Partial<EmployeeDetail>),
+                            };
+                            if (nextUrl) merged.photo_url = nextUrl;
+                            return merged;
+                          });
+                        }}
+                      />
+                    </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 font-bold">
+                    <div className="w-24 h-24 rounded-full bg-linear-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700 text-3xl font-bold ring-4 ring-white shadow-lg">
                       {`${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`.trim().toUpperCase() || "?"}
                     </div>
                   )}
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
                       {employee.first_name} {employee.last_name}
                     </h1>
-                    <p className="text-sm text-gray-500">Employee Code: {employee.employee_code || "-"}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-gray-100 text-gray-600 text-sm font-medium border border-gray-200">
+                        <Badge className="w-3.5 h-3.5" />
+                        {employee.employee_code || "No ID"}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-600 font-medium">{employee.position || "No Position"}</span>
+                    </div>
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${employee.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
-                  {employee.status || "Active"}
+                
+                <span className={`px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm border flex items-center gap-2 ${
+                  employee.status === "active"
+                    ? "bg-green-50 text-green-700 border-green-100"
+                    : employee.status === "inactive"
+                    ? "bg-red-50 text-red-700 border-red-100"
+                    : "bg-amber-50 text-amber-700 border-amber-100"
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    employee.status === "active" ? "bg-green-500" : employee.status === "inactive" ? "bg-red-500" : "bg-amber-500"
+                  }`}></span>
+                  {employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : "Pending"}
                 </span>
               </div>
 
-              <div className="flex gap-0 border-b border-gray-200">
-                {(limitedView ? tabs.filter((t) => t.id === "personal") : tabs).map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${
-                        activeTab === tab.id
-                          ? "border-blue-600 text-blue-600"
-                          : "border-transparent text-gray-700 hover:text-gray-900"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+              {/* Tabs */}
+              <div className="border-b border-gray-200 overflow-x-auto bg-white px-2">
+                <div className="flex gap-1 min-w-max px-4">
+                  {(limitedView ? tabs.filter((t) => t.id === "personal") : tabs).map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`group flex items-center gap-2 px-5 py-4 font-medium transition-all relative outline-none ${
+                          isActive
+                            ? "text-blue-600"
+                            : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-gray-400 group-hover:text-gray-600"}`} />
+                        {tab.label}
+                        {isActive && (
+                          <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full"></span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="p-6">
+              <div className="p-8 bg-gray-50/30">
                 {activeTab === "personal" && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Personal & Employment</h3>
+                      <h3 className="text-lg font-bold text-gray-900">Personal & Employment Information</h3>
                       {!limitedView && (
                         <Link
                           href={`/employees/${id}/edit`}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm text-sm font-medium"
                         >
-                          Edit
+                          <Edit2 className="w-4 h-4" /> Edit Details
                         </Link>
                       )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="flex items-center gap-2 text-gray-700"><Mail className="w-4 h-4" /> {employee.email}</div>
-                      <div className="flex items-center gap-2 text-gray-700"><Phone className="w-4 h-4" /> {employee.phone || "-"}</div>
-                      <div className="flex items-center gap-2 text-gray-700"><Badge className="w-4 h-4" /> Position: {employee.position || "-"}</div>
-                      <div className="flex items-center gap-2 text-gray-700"><Building2 className="w-4 h-4" /> Department: {employee.department || "-"}</div>
-                      <div className="text-gray-700 text-sm">Gender: {employee.gender || "-"}</div>
-                      <div className="text-gray-700 text-sm">Date of Birth: {employee.date_of_birth || "-"}</div>
-                      <div className="text-gray-700 text-sm">Start Date: {employee.start_date || "-"}</div>
-                      <div className="text-gray-700 text-sm">Salary: {formatMoney(employee.salary)}</div>
-                      <div className="text-gray-700 text-sm sm:col-span-2">Address: {employee.address || "-"}</div>
+                    
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {/* Contact Info Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-blue-50/50 border-b border-blue-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                            <Mail className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Contact Information</h4>
+                        </div>
+                        <div className="p-5 space-y-4">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email Address</label>
+                            <div className="flex items-center gap-2 text-gray-900 font-medium">
+                              {employee.email}
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone Number</label>
+                            <div className="flex items-center gap-2 text-gray-900 font-medium">
+                              {employee.phone || "Not provided"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Job Details Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-indigo-50/50 border-b border-indigo-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Job Details</h4>
+                        </div>
+                        <div className="p-5 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Position</label>
+                              <div className="text-gray-900 font-medium">{employee.position || "Not assigned"}</div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</label>
+                              <div className="text-gray-900 font-medium">{employee.department || "Not assigned"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Demographics Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-purple-50/50 border-b border-purple-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
+                            <User className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Demographics</h4>
+                        </div>
+                        <div className="p-5 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Gender</label>
+                              <div className="text-gray-900 font-medium capitalize">{employee.gender || "Not specified"}</div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Date of Birth</label>
+                              <div className="text-gray-900 font-medium">{employee.date_of_birth || "Not provided"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-emerald-50/50 border-b border-emerald-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Employment Terms</h4>
+                        </div>
+                        <div className="p-5 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary</label>
+                              <div className="text-gray-900 font-bold text-lg">{formatMoney(employee.salary)}</div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Start Date</label>
+                              <div className="text-gray-900 font-medium">{employee.start_date || "Not provided"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Location Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow lg:col-span-2">
+                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-gray-200 text-gray-600 rounded-lg">
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Location</h4>
+                        </div>
+                        <div className="p-5">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Address</label>
+                            <div className="text-gray-900 font-medium">{employee.address || "No address provided"}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {activeTab === "account" && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">User Account</h3>
-                      {isEditingAccount ? (
-                        <button
-                          type="button"
-                          onClick={cancelEditAccount}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
-                        >
-                          <X className="w-4 h-4" />
-                          Cancel
-                        </button>
-                      ) : (
+                      <h3 className="text-lg font-bold text-gray-900">User Account Settings</h3>
+                      {!isEditingAccount && (
                         <button
                           type="button"
                           onClick={startEditAccount}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-sm transition-all"
                         >
                           <KeyRound className="w-4 h-4" />
-                          Edit Account
+                          {employee.user ? "Edit Account" : "Create Account"}
                         </button>
                       )}
                     </div>
 
-                    {accountError ? (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{accountError}</div>
-                    ) : null}
-                    {accountSuccess ? (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">{accountSuccess}</div>
-                    ) : null}
-
-                    {isEditingAccount ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Name</label>
-                            <input
-                              type="text"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                              value={accountForm.name}
-                              onChange={(e) => handleAccountFieldChange("name", e.target.value)}
-                              placeholder={`${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Account name"}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Role</label>
-                            <select
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                              value={accountForm.role}
-                              onChange={(e) => handleAccountFieldChange("role", e.target.value)}
-                            >
-                              <option value="employee">Employee</option>
-                              <option value="manager">Manager</option>
-                              <option value="hr">HR</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Password (leave blank to keep)</label>
-                            <input
-                              type="password"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                              value={accountForm.password}
-                              onChange={(e) => handleAccountFieldChange("password", e.target.value)}
-                              placeholder="••••••••"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Password</label>
-                            <input
-                              type="password"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                              value={accountForm.password_confirmation}
-                              onChange={(e) => handleAccountFieldChange("password_confirmation", e.target.value)}
-                              placeholder="••••••••"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleSaveAccount}
-                            disabled={savingAccount}
-                            className="inline-flex items-center gap-1 px-4 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Check className="w-4 h-4" />
-                            {savingAccount ? "Saving..." : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditAccount}
-                            className="inline-flex items-center gap-1 px-4 py-2 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            <X className="w-4 h-4" />
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 text-gray-700 text-sm">
-                        {employee.user ? (
-                          <>
-                            <div className="flex items-center gap-2"><UserCircle2 className="w-4 h-4" /> {employee.user.name}</div>
-                            <div className="text-gray-700">Role: {employee.user.role}</div>
-                            <div className="text-gray-700">User ID: {employee.user.id}</div>
-                            <p className="text-xs text-gray-500">Use Edit Account to change name, role, or password.</p>
-                          </>
-                        ) : (
-                          <p className="text-sm text-gray-500">No account linked. Click Edit Account to create one.</p>
-                        )}
+                    {accountError && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800 flex items-center gap-2">
+                        <X className="w-4 h-4" />
+                        {accountError}
                       </div>
                     )}
+                    {accountSuccess && (
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-center gap-2">
+                        <Check className="w-4 h-4" />
+                        {accountSuccess}
+                      </div>
+                    )}
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                        <div className="p-1.5 bg-gray-200 text-gray-600 rounded-lg">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <h4 className="font-semibold text-gray-800">Account Credentials</h4>
+                      </div>
+
+                      <div className="p-6">
+                        {isEditingAccount ? (
+                          <div className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">Display Name</label>
+                                <div className="relative">
+                                  <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <input
+                                    type="text"
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    value={accountForm.name}
+                                    onChange={(e) => handleAccountFieldChange("name", e.target.value)}
+                                    placeholder={`${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Account name"}
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">Role & Permission</label>
+                                <div className="relative">
+                                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <select
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                                    value={accountForm.role}
+                                    onChange={(e) => handleAccountFieldChange("role", e.target.value)}
+                                  >
+                                    <option value="employee">Employee</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="hr">HR Administrator</option>
+                                    <option value="admin">System Admin</option>
+                                  </select>
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                    <ArrowLeft className="w-3 h-3 -rotate-90" />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">New Password <span className="text-gray-400 font-normal">(Optional)</span></label>
+                                <div className="relative">
+                                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <input
+                                    type="password"
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    value={accountForm.password}
+                                    onChange={(e) => handleAccountFieldChange("password", e.target.value)}
+                                    placeholder="••••••••"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                                <div className="relative">
+                                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <input
+                                    type="password"
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    value={accountForm.password_confirmation}
+                                    onChange={(e) => handleAccountFieldChange("password_confirmation", e.target.value)}
+                                    placeholder="••••••••"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveAccount}
+                                disabled={savingAccount}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                              >
+                                {savingAccount ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-4 h-4" />
+                                    Save Changes
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditAccount}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            {employee.user ? (
+                              <div className="grid sm:grid-cols-3 gap-6">
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Username</p>
+                                  <div className="flex items-center gap-2 text-gray-900 font-medium">
+                                    <UserCircle2 className="w-4 h-4 text-gray-400" />
+                                    {employee.user.name}
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</p>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wide">
+                                    {employee.user.role}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">System ID</p>
+                                  <div className="text-gray-900 font-mono text-sm">#{employee.user.id}</div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center py-8 text-center bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                <div className="p-3 bg-gray-100 rounded-full mb-3">
+                                  <Lock className="w-6 h-6 text-gray-400" />
+                                </div>
+                                <h3 className="text-sm font-medium text-gray-900">No Account Linked</h3>
+                                <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                                  This employee doesn't have a login account yet. Create one to allow accessing the system.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={startEditAccount}
+                                  className="mt-4 text-blue-600 text-sm font-medium hover:underline"
+                                >
+                                  Create Account Now
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {activeTab === "benefits" && (
                   <div className="space-y-6">
-                    {assignError ? (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{assignError}</div>
-                    ) : null}
-                    {removeError ? (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{removeError}</div>
-                    ) : null}
-                    {/* <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                        <p className="text-xs font-semibold text-gray-600 uppercase">Benefits (flags)</p>
-                        <div className="mt-2 space-y-1 text-sm text-gray-700">
-                          <p>Health Insurance: {employee.benefits?.health_insurance ? "Yes" : "No"}</p>
-                          <p>Retirement Plan: {employee.benefits?.retirement_plan ? "Yes" : "No"}</p>
-                          <p>Dental Coverage: {employee.benefits?.dental_coverage ? "Yes" : "No"}</p>
-                          <p>Vision Coverage: {employee.benefits?.vision_coverage ? "Yes" : "No"}</p>
-                        </div>
+                    <h3 className="text-lg font-bold text-gray-900">Benefits & Deductions</h3>
+                    
+                    {assignError && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800 flex items-center gap-2">
+                        <X className="w-4 h-4" />
+                        {assignError}
                       </div>
-                      <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                        <p className="text-xs font-semibold text-gray-600 uppercase">Deductions (amounts)</p>
-                        <div className="mt-2 space-y-1 text-sm text-gray-700">
-                          <p>Tax: {formatPercent(employee.deductions?.tax_percentage)}</p>
-                          <p>Social Security: {formatPercent(employee.deductions?.social_security_percentage)}</p>
-                          <p>Health Insurance Deduction: {formatMoney(employee.deductions?.health_insurance_deduction)}</p>
-                        </div>
+                    )}
+                    {removeError && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800 flex items-center gap-2">
+                        <X className="w-4 h-4" />
+                        {removeError}
                       </div>
-                    </div> */}
+                    )}
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-gray-800">Catalog Benefits</p>
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {/* Benefits Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-100 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <select
-                              className="px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                              value={selectedBenefitId}
-                              onChange={(e) => setSelectedBenefitId(e.target.value)}
-                            >
-                              <option value="">Select benefit</option>
-                              {availableBenefits.map((b) => (
-                                <option key={b.id} value={String(b.id)}>
-                                  {b.benefit_name || b.name} {b.amount ? `• ${b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}` : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={assignBenefit}
-                              disabled={assigning || !selectedBenefitId}
-                              className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md disabled:opacity-50 hover:bg-blue-700"
-                            >
-                              Assign
-                            </button>
+                            <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                              <Gift className="w-4 h-4" />
+                            </div>
+                            <h4 className="font-semibold text-gray-800">Benefits & Allowances</h4>
                           </div>
                         </div>
-                        {Array.isArray(employee.employee_benefits) && employee.employee_benefits.length > 0 ? (
-                          <div className="space-y-2">
-                            {employee.employee_benefits.map((item) =>
-                              renderCatalogLine(item, {
-                                onRemove: () => removeAssignedBenefit(item.id),
-                                removing: removingId === `benefit:${String(item.id)}`,
-                              })
+                        
+                        <div className="p-5 space-y-4">
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <select
+                                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
+                                value={selectedBenefitId}
+                                onChange={(e) => setSelectedBenefitId(e.target.value)}
+                              >
+                                <option value="">Select benefit to add...</option>
+                                {availableBenefits.map((b) => (
+                                  <option key={b.id} value={String(b.id)}>
+                                    {b.benefit_name || b.name} {b.amount ? `• ${b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={assignBenefit}
+                                disabled={assigning || !selectedBenefitId}
+                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg disabled:opacity-50 hover:bg-green-700 shadow-sm transition-colors flex items-center gap-2 justify-center"
+                              >
+                                <Plus className="w-4 h-4" /> Add
+                              </button>
+                          </div>
+
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                            {Array.isArray(employee.employee_benefits) && employee.employee_benefits.length > 0 ? (
+                              employee.employee_benefits.map((item) =>
+                                renderCatalogLine(item, {
+                                  onRemove: () => removeAssignedBenefit(item.id),
+                                  removing: removingId === `benefit:${String(item.id)}`,
+                                })
+                              )
+                            ) : (
+                              <div className="text-center py-6 text-gray-400 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                <Gift className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">No benefits assigned yet</p>
+                              </div>
                             )}
                           </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">No catalog benefits assigned.</p>
-                        )}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-gray-800">Catalog Deductions</p>
+
+                      {/* Deductions Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100 flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-amber-100 text-amber-600 rounded-lg">
+                              <MinusCircle className="w-4 h-4" />
+                            </div>
+                            <h4 className="font-semibold text-gray-800">Deductions</h4>
+                          </div>
+                        </div>
+                        
+                        <div className="p-5 space-y-4">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <select
-                              className="px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none"
                               value={selectedDeductionId}
                               onChange={(e) => setSelectedDeductionId(e.target.value)}
                             >
-                              <option value="">Select deduction</option>
+                              <option value="">Select deduction to add...</option>
                               {availableDeductions.map((d) => (
                                 <option key={d.id} value={String(d.id)}>
                                   {d.deduction_name || d.name} {d.amount ? `• ${d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}` : ""}
@@ -1310,388 +1524,428 @@ export default function EmployeeDetailPage() {
                               type="button"
                               onClick={assignDeduction}
                               disabled={assigning || !selectedDeductionId}
-                              className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md disabled:opacity-50 hover:bg-blue-700"
+                              className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg disabled:opacity-50 hover:bg-amber-700 shadow-sm transition-colors flex items-center gap-2 justify-center"
                             >
-                              Assign
+                              <Plus className="w-4 h-4" /> Add
                             </button>
                           </div>
-                        </div>
-                        {Array.isArray(employee.employee_deductions) && employee.employee_deductions.length > 0 ? (
-                          <div className="space-y-2">
-                            {employee.employee_deductions.map((item) =>
-                              renderCatalogLine(item, {
-                                onRemove: () => removeAssignedDeduction(item.id),
-                                removing: removingId === `deduction:${String(item.id)}`,
-                              })
+
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                            {Array.isArray(employee.employee_deductions) && employee.employee_deductions.length > 0 ? (
+                              employee.employee_deductions.map((item) =>
+                                renderCatalogLine(item, {
+                                  onRemove: () => removeAssignedDeduction(item.id),
+                                  removing: removingId === `deduction:${String(item.id)}`,
+                                })
+                              )
+                            ) : (
+                              <div className="text-center py-6 text-gray-400 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                <MinusCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">No deductions assigned yet</p>
+                              </div>
                             )}
                           </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">No catalog deductions assigned.</p>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {activeTab === "attendance" && (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-800">Attendance & Leave</h3>
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                      Leave allocations are shown below. Use the form to add or change the default leave type for this employee.
-                    </div>
-                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                      {/* <div className="flex flex-wrap gap-3 items-end">
-                        <div className="min-w-40">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">OT Date</label>
-                          <input
-                            type="date"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={overtimeDate}
-                            onChange={(e) => setOvertimeDate(e.target.value)}
-                          />
-                        </div>
-                        <div className="min-w-32">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Hours</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.25"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={overtimeHours}
-                            onChange={(e) => setOvertimeHours(e.target.value)}
-                            placeholder="e.g., 2"
-                          />
-                        </div>
-                        <div className="min-w-48 flex-1">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Reason (optional)</label>
-                          <input
-                            type="text"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={overtimeReason}
-                            onChange={(e) => setOvertimeReason(e.target.value)}
-                            placeholder="e.g., Project deadline"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleCreateOvertime}
-                          disabled={overtimeSaving || !overtimeDate || !overtimeHours}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {overtimeSaving ? "Saving..." : "Add OT"}
-                        </button>
-                      </div> */}
-                      {overtimeError && <p className="text-sm text-red-600">{overtimeError}</p>}
-                      {overtimeSuccess && <p className="text-sm text-green-600">{overtimeSuccess}</p>}
-                      {/* <div className="pt-2 space-y-2">
-                        <p className="text-xs font-semibold text-gray-600 uppercase">Overtime Records</p>
-                        {overtimeLoading && <p className="text-sm text-gray-500">Loading...</p>}
-                        {!overtimeLoading && (!overtimes || overtimes.length === 0) ? (
-                          <p className="text-sm text-gray-500">No overtime records yet.</p>
-                        ) : null}
-                        {!overtimeLoading && Array.isArray(overtimes) && overtimes.length > 0 ? (
-                          <div className="space-y-2">
-                            {overtimes.map((ot, idx) => (
-                              <div key={ot.id ?? idx} className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 flex items-center justify-between">
-                                <div className="space-y-1">
-                                  <p className="font-medium text-gray-900">{ot.date}</p>
-                                  <p className="text-xs text-gray-600">Hours: {ot.hours}</p>
-                                  {ot.reason ? <p className="text-xs text-gray-500">Reason: {ot.reason}</p> : null}
-                                </div>
-                              </div>
-                            ))}
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-bold text-gray-900">Attendance & Leave Management</h3>
+                    
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {/* Overtime Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-orange-50/50 border-b border-orange-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg">
+                            <Clock className="w-4 h-4" />
                           </div>
-                        ) : null}
-                      </div> */}
-                    </div>
-                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                      <div className="flex flex-wrap gap-3 items-end">
-                        <div className="min-w-48 flex-1">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Leave type</label>
-                          <select
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={selectedLeaveTypeId}
-                            onChange={(e) => {
-                              setSelectedLeaveTypeId(e.target.value);
-                              if (!allocationDays) {
-                                const nextDefault = getDefaultDaysForLeaveType(e.target.value);
-                                setAllocationDays(nextDefault ? String(nextDefault) : "");
-                              }
-                            }}
-                            disabled={leaveTypesLoading}
-                          >
-                            <option value="">Select leave type</option>
-                            {leaveTypes.map((lt: any) => (
-                              <option key={lt.id} value={lt.id}>
-                                {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"}
-                              </option>
-                            ))}
-                          </select>
-                          {leaveTypesError && <p className="text-xs text-red-600 mt-1">{leaveTypesError}</p>}
+                          <h4 className="font-semibold text-gray-800">Overtime Log</h4>
                         </div>
-                        <div className="min-w-32">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Year</label>
-                          <input
-                            type="number"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={allocationYear}
-                            onChange={(e) => setAllocationYear(e.target.value)}
-                          />
-                        </div>
-                        <div className="min-w-32">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Days</label>
-                          <input
-                            type="number"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={allocationDays}
-                            onChange={(e) => setAllocationDays(e.target.value)}
-                            placeholder={selectedLeaveTypeId ? String(getDefaultDaysForLeaveType(selectedLeaveTypeId)) : ""}
-                          />
-                        </div>
-                        <div className="min-w-48 flex-1">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Note (optional)</label>
-                          <input
-                            type="text"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={allocationNote}
-                            onChange={(e) => setAllocationNote(e.target.value)}
-                            placeholder="e.g., Default annual leave"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAssignLeave}
-                          disabled={savingAllocation || !selectedLeaveTypeId}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {savingAllocation ? "Saving..." : "Assign"}
-                        </button>
-                      </div>
-                      {allocationError && <p className="text-sm text-red-600">{allocationError}</p>}
-                    </div>
-                    {Array.isArray(allocations) && allocations.length ? (
-                      <div className="space-y-3">
-                        {allocations.map((alloc) => (
-                          <div key={alloc.id ?? `${alloc.leave_type_id}-${alloc.start_date ?? ""}`}
-                            className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 flex items-center justify-between">
-                            {editingAllocationId === alloc.id ? (
-                              <div className="space-y-2 flex-1">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-gray-700">Leave type</label>
-                                    <select
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                                      value={allocationEdits[alloc.id!]?.leave_type_id ?? alloc.leave_type_id}
-                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "leave_type_id", e.target.value)}
-                                    >
-                                      {leaveTypes.map((lt) => (
-                                        <option key={lt.id} value={lt.id}>
-                                          {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-gray-700">Year</label>
-                                    <input
-                                      type="number"
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                                      value={allocationEdits[alloc.id!]?.year ?? alloc.year ?? ""}
-                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "year", e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-gray-700">Days allocated</label>
-                                    <input
-                                      type="number"
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                                      value={allocationEdits[alloc.id!]?.days_allocated ?? alloc.days_allocated ?? ""}
-                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "days_allocated", e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-gray-700">Days used</label>
-                                    <input
-                                      type="number"
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                                      value={allocationEdits[alloc.id!]?.days_used ?? alloc.days_used ?? 0}
-                                      onChange={(e) => handleAllocationEditChange(alloc.id!, "days_used", e.target.value)}
-                                    />
-                                  </div>
+                        
+                        <div className="p-5 space-y-4">
+                          <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</label>
+                                <input
+                                  type="date"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                  value={overtimeDate}
+                                  onChange={(e) => setOvertimeDate(e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Hours</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.25"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                  value={overtimeHours}
+                                  onChange={(e) => setOvertimeHours(e.target.value)}
+                                  placeholder="e.g. 2.5"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Reason</label>
+                              <input
+                                type="text"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                value={overtimeReason}
+                                onChange={(e) => setOvertimeReason(e.target.value)}
+                                placeholder="Optional description..."
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleCreateOvertime}
+                              disabled={overtimeSaving || !overtimeDate || !overtimeHours}
+                              className="w-full py-2.5 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all flex justify-center items-center gap-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              {overtimeSaving ? "Adding..." : "Log Overtime"}
+                            </button>
+                            
+                            {overtimeError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">{overtimeError}</p>}
+                            {overtimeSuccess && <p className="text-sm text-green-600 bg-green-50 p-2 rounded-lg border border-green-100">{overtimeSuccess}</p>}
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Recent Entries</h5>
+                            <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                              {overtimeLoading ? (
+                                <p className="text-sm text-gray-500 italic p-2">Loading records...</p>
+                              ) : !overtimes || overtimes.length === 0 ? (
+                                <div className="text-center py-6 text-gray-400 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                  <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                  <p className="text-sm">No overtime recorded</p>
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-700">Note</label>
-                                  <input
-                                    type="text"
-                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm text-black"
-                                    value={allocationEdits[alloc.id!]?.note ?? alloc.note ?? ""}
-                                    onChange={(e) => handleAllocationEditChange(alloc.id!, "note", e.target.value)}
-                                    placeholder="Optional note"
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <p className="text-xs text-gray-500">Type ID: {alloc.leave_type_id}</p>
-                                  <div className="flex items-center gap-2">
-                                    {alloc.leave_type?.is_paid !== undefined ? (
-                                      <span className={`text-xs px-2 py-1 rounded-full border ${alloc.leave_type.is_paid ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-                                        {alloc.leave_type.is_paid ? "Paid" : "Unpaid"}
+                              ) : (
+                                overtimes.map((ot, idx) => (
+                                  <div key={ot.id ?? idx} className="p-3 bg-white border border-gray-100 rounded-lg hover:border-orange-200 hover:shadow-sm transition-all group">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="font-medium text-gray-900">{ot.date}</span>
+                                      <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-semibold border border-orange-100">
+                                        {ot.hours}h
                                       </span>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateAllocation(alloc.id!)}
-                                      disabled={savingAllocationId === alloc.id}
-                                      className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      {savingAllocationId === alloc.id ? "Saving..." : "Save"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => cancelEditAllocation(alloc)}
-                                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-md border border-gray-300 hover:bg-gray-200"
-                                    >
-                                      Cancel
-                                    </button>
+                                    </div>
+                                    {ot.reason && <p className="text-xs text-gray-500 line-clamp-1">{ot.reason}</p>}
                                   </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex-1 flex items-center justify-between gap-3">
-                                <div className="space-y-1">
-                                  <p className="font-medium text-gray-900">{alloc.leave_type?.name || "Leave Type"}</p>
-                                  <p className="text-xs text-gray-500">Year: {alloc.year ?? "-"}</p>
-                                  <p className="text-xs text-gray-500">Days: used {alloc.days_used ?? 0} / allocated {alloc.days_allocated ?? 0}</p>
-                                  {alloc.note ? <p className="text-xs text-gray-500">Note: {alloc.note}</p> : null}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {alloc.leave_type?.is_paid !== undefined ? (
-                                    <span className={`text-xs px-2 py-1 rounded-full border ${alloc.leave_type.is_paid ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-                                      {alloc.leave_type.is_paid ? "Paid" : "Unpaid"}
-                                    </span>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => beginEditAllocation(alloc)}
-                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md shadow-sm hover:bg-blue-700"
-                                  >
-                                    Edit
-                                  </button>
-                                </div>
-                              </div>
-                            )}
+                                ))
+                              )}
+                            </div>
                           </div>
-                        ))}
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-600">No leave allocations found. Use edit to assign a leave type.</p>
-                    )}
+
+                      {/* Leave Allocation Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-blue-50/50 border-b border-blue-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                            <CalendarClock className="w-4 h-4" />
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Leave Balance Assignment</h4>
+                        </div>
+                        
+                        <div className="p-5 space-y-4">
+                          <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Leave Type</label>
+                              <select
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                value={selectedLeaveTypeId}
+                                onChange={(e) => {
+                                  setSelectedLeaveTypeId(e.target.value);
+                                  if (!allocationDays) {
+                                    const nextDefault = getDefaultDaysForLeaveType(e.target.value);
+                                    setAllocationDays(nextDefault ? String(nextDefault) : "");
+                                  }
+                                }}
+                                disabled={leaveTypesLoading}
+                              >
+                                <option value="">Select type...</option>
+                                {leaveTypes.map((lt: any) => (
+                                  <option key={lt.id} value={lt.id}>
+                                    {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Year</label>
+                                <input
+                                  type="number"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                  value={allocationYear}
+                                  onChange={(e) => setAllocationYear(e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Days</label>
+                                <input
+                                  type="number"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                  value={allocationDays}
+                                  onChange={(e) => setAllocationDays(e.target.value)}
+                                  placeholder={selectedLeaveTypeId ? String(getDefaultDaysForLeaveType(selectedLeaveTypeId)) : ""}
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleAssignLeave}
+                              disabled={savingAllocation || !selectedLeaveTypeId}
+                              className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all flex justify-center items-center gap-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              {savingAllocation ? "Saving..." : "Assign Leave"}
+                            </button>
+                            {allocationError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">{allocationError}</p>}
+                          </div>
+
+                          <div className="space-y-3">
+                            <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Current Allocations</h5>
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                              {Array.isArray(allocations) && allocations.length ? (
+                                allocations.map((alloc) => (
+                                  <div key={alloc.id ?? `${alloc.leave_type_id}-${alloc.start_date ?? ""}`}
+                                    className="p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-200 hover:shadow-sm transition-all">
+                                    {editingAllocationId === alloc.id ? (
+                                      <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Allocated</label>
+                                            <input
+                                              type="number"
+                                              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                                              value={allocationEdits[alloc.id!]?.days_allocated ?? alloc.days_allocated ?? ""}
+                                              onChange={(e) => handleAllocationEditChange(alloc.id!, "days_allocated", e.target.value)}
+                                            />
+                                          </div>
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Used</label>
+                                            <input
+                                              type="number"
+                                              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                                              value={allocationEdits[alloc.id!]?.days_used ?? alloc.days_used ?? 0}
+                                              onChange={(e) => handleAllocationEditChange(alloc.id!, "days_used", e.target.value)}
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateAllocation(alloc.id!)}
+                                            disabled={savingAllocationId === alloc.id}
+                                            className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700"
+                                          >
+                                            Save
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => cancelEditAllocation(alloc)}
+                                            className="flex-1 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-medium rounded hover:bg-gray-50"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2">
+                                            <p className="font-semibold text-gray-900 text-sm">{alloc.leave_type?.name || "Unknown Type"}</p>
+                                            <span className="text-xs text-gray-400 font-medium">({alloc.year})</span>
+                                          </div>
+                                          <div className="flex gap-3 text-xs">
+                                            <span className="text-gray-600">Total: <span className="font-medium text-gray-900">{alloc.days_allocated || 0}</span></span>
+                                            <span className="text-gray-400">|</span>
+                                            <span className="text-gray-600">Used: <span className="font-medium text-amber-600">{alloc.days_used || 0}</span></span>
+                                          </div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => beginEditAllocation(alloc)}
+                                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          title="Edit Allocation"
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-center py-6 text-gray-400 bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                                  <CalendarClock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                  <p className="text-sm">No leave allocated</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {activeTab === "work-schedule" && (
-                  <div className="space-y-5">
+                  <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-800">Work Schedule Assignment</h3>
-                      <Link href="/settings/work-schedules" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                        Manage Schedules
+                      <h3 className="text-lg font-bold text-gray-900">Work Schedule Assignment</h3>
+                      <Link
+                        href="/settings/work-schedules"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm text-sm font-medium"
+                      >
+                        <Clock className="w-4 h-4" /> Manage Schedules
                       </Link>
                     </div>
 
-                    <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
-                      <div className="flex flex-wrap gap-3 items-end">
-                        <div className="min-w-56 flex-1">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Select Schedule</label>
-                          <select
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={selectedScheduleId}
-                            onChange={(e) => setSelectedScheduleId(e.target.value)}
-                            disabled={schedulesLoading}
-                          >
-                            <option value="">Choose schedule</option>
-                            {schedules.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name} • {s.hours_per_day}h/day
-                              </option>
-                            ))}
-                          </select>
-                          {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
-                        </div>
-                        <div className="min-w-40">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Effective From</label>
-                          <input
-                            type="date"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
-                            value={scheduleEffectiveFrom}
-                            onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAssignSchedule}
-                          disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {assigningSchedule ? "Assigning..." : "Assign"}
-                        </button>
-                      </div>
-                      {scheduleAssignError && <p className="text-sm text-red-600">{scheduleAssignError}</p>}
-                      {scheduleAssignSuccess && <p className="text-sm text-green-600">{scheduleAssignSuccess}</p>}
-                    </div>
-
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
-                      <p className="text-xs font-semibold text-gray-600 uppercase">Current Schedule</p>
-                      {employee.work_schedule ? (
-                        <div className="space-y-1 text-sm text-gray-800">
-                          <p className="font-medium text-gray-900">{employee.work_schedule.name}</p>
-                          <p>{employee.work_schedule.hours_per_day ?? "-"} hours per day</p>
-                          {employee.work_schedule.effective_from ? (
-                            <p>Effective from: {employee.work_schedule.effective_from}</p>
-                          ) : null}
-                          <div className="flex flex-wrap gap-2">
-                            {(employee.work_schedule.working_days || []).map((d: string) => (
-                              <span key={d} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                                {d.toUpperCase()}
-                              </span>
-                            ))}
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      {/* Current Schedule Card */}
+                      <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="px-5 py-3 bg-indigo-50/50 border-b border-indigo-100 flex items-center gap-2">
+                          <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                            <Clock className="w-4 h-4" />
                           </div>
-                          {employee.work_schedule.notes ? (
-                            <p className="text-sm text-gray-600">{employee.work_schedule.notes}</p>
-                          ) : null}
+                          <h4 className="font-semibold text-gray-800">Current Schedule</h4>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">No schedule assigned yet.</p>
-                      )}
-                      <div className="pt-3 space-y-2">
-                        <p className="text-xs font-semibold text-gray-600 uppercase">Assignments (latest first)</p>
-                        {scheduleHistoryError ? (
-                          <p className="text-xs text-red-600">{scheduleHistoryError}</p>
-                        ) : null}
-                        {Array.isArray(scheduleHistory) && scheduleHistory.length ? (
-                          <div className="space-y-2">
-                            {scheduleHistory.map((item, idx) => {
-                              const sched = item.work_schedule || item;
-                              return (
-                                <div key={`${item.id ?? idx}-${item.work_schedule_id ?? sched?.id ?? "sched"}`} className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800">
-                                  <div className="flex items-center justify-between">
-                                    <p className="font-medium text-gray-900">{sched?.name ?? "Work Schedule"}</p>
-                                    <span className="text-xs text-gray-500">{item.effective_from || sched?.effective_from || ""}</span>
-                                  </div>
-                                  <p className="text-xs text-gray-600">{sched?.hours_per_day ?? "-"} hours/day</p>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {(sched?.working_days || []).map((d: string) => (
-                                      <span key={d} className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                                        {d.toUpperCase()}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  {sched?.notes ? <p className="text-xs text-gray-600 mt-1">{sched.notes}</p> : null}
+                        
+                        <div className="p-5">
+                          {employee.work_schedule ? (
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-gray-50/50 rounded-xl border border-gray-200">
+                              <div className="space-y-2">
+                                <h5 className="text-lg font-bold text-gray-900">{employee.work_schedule.name}</h5>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                  <span>{employee.work_schedule.hours_per_day ?? "-"} hours/day</span>
+                                  {employee.work_schedule.effective_from && (
+                                    <>
+                                      <span className="text-gray-300">|</span>
+                                      <span>Effective: {employee.work_schedule.effective_from}</span>
+                                    </>
+                                  )}
                                 </div>
-                              );
-                            })}
+                                {employee.work_schedule.notes && (
+                                  <p className="text-sm text-gray-500 italic">"{employee.work_schedule.notes}"</p>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-w-xs justify-end">
+                                {(employee.work_schedule.working_days || []).map((d: string) => (
+                                  <span key={d} className="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                    {d.slice(0, 3)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-10 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                              <Clock className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                              <p className="text-gray-500 font-medium">No active schedule assigned</p>
+                              <p className="text-sm text-gray-400 mt-1">Assign a schedule from the list below</p>
+                            </div>
+                          )}
+
+                          <div className="mt-6 pt-6 border-t border-gray-100">
+                            <h5 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              Change Schedule
+                            </h5>
+                            
+                            <div className="flex flex-col sm:flex-row gap-3 items-end bg-gray-50 p-4 rounded-xl border border-gray-100">
+                              <div className="flex-1 w-full">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">New Schedule</label>
+                                <select
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                  value={selectedScheduleId}
+                                  onChange={(e) => setSelectedScheduleId(e.target.value)}
+                                  disabled={schedulesLoading}
+                                >
+                                  <option value="">Select schedule...</option>
+                                  {schedules.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name} ({s.hours_per_day}h)
+                                    </option>
+                                  ))}
+                                </select>
+                                {schedulesError && <p className="text-xs text-red-600 mt-1">{schedulesError}</p>}
+                              </div>
+                              <div className="w-full sm:w-48">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Effective Date</label>
+                                <input
+                                  type="date"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                  value={scheduleEffectiveFrom}
+                                  onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleAssignSchedule}
+                                disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
+                                className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                              >
+                                {assigningSchedule ? "Saving..." : "Update"}
+                              </button>
+                            </div>
+                            {scheduleAssignError && <p className="text-sm text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-100">{scheduleAssignError}</p>}
+                            {scheduleAssignSuccess && <p className="text-sm text-green-600 mt-2 bg-green-50 p-2 rounded-lg border border-green-100">{scheduleAssignSuccess}</p>}
                           </div>
-                        ) : (
-                          <p className="text-xs text-gray-500">No history found.</p>
-                        )}
+                        </div>
+                      </div>
+
+                      {/* History Card */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow h-fit">
+                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Assignment History</h4>
+                        </div>
+                        <div className="p-0">
+                          {scheduleHistoryError ? (
+                            <div className="p-4 text-sm text-red-600 bg-red-50">{scheduleHistoryError}</div>
+                          ) : null}
+                          
+                          <div className="max-h-[500px] overflow-y-auto">
+                            {Array.isArray(scheduleHistory) && scheduleHistory.length ? (
+                              <div className="divide-y divide-gray-100">
+                                {scheduleHistory.map((item, idx) => {
+                                  const sched = item.work_schedule || item;
+                                  const isFirst = idx === 0;
+                                  return (
+                                    <div key={`${item.id ?? idx}-${item.work_schedule_id ?? sched?.id ?? "sched"}`} className={`p-4 hover:bg-gray-50 transition-colors ${isFirst ? "bg-blue-50/30" : ""}`}>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <p className={`font-semibold text-sm ${isFirst ? "text-blue-700" : "text-gray-900"}`}>
+                                          {sched?.name ?? "Work Schedule"}
+                                        </p>
+                                        {isFirst && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded uppercase">Latest</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                        <CalendarClock className="w-3 h-3" />
+                                        <span>Effective: {item.effective_from || sched?.effective_from || "N/A"}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {(sched?.working_days || []).map((d: string) => (
+                                          <span key={d} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200 uppercase">
+                                            {d.slice(0, 3)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="p-8 text-center text-gray-400">
+                                <p className="text-sm">No history records found.</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1777,17 +2031,20 @@ export default function EmployeeDetailPage() {
                           const rawPath = employee.documents?.[item.key] ?? null;
                           const url = resolveFileUrl(rawPath);
                           return (
-                            <div key={item.key} className="flex items-center justify-between gap-4">
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                                <p className="text-xs text-gray-500 truncate" title={rawPath || ""}>{rawPath || "-"}</p>
+                            <div key={item.key} className="flex items-center justify-between gap-4 p-3 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors">
+                              <div className="min-w-0 flex items-start gap-2">
+                                <FileText className="w-4 h-4 text-blue-500 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                                  <p className="text-xs text-gray-500 truncate" title={rawPath || ""}>{rawPath || "-"}</p>
+                                </div>
                               </div>
                               {url ? (
                                 <a
                                   href={url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
+                                  className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-100"
                                 >
                                   Open
                                 </a>

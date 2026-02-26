@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, Download, Upload, X } from "lucide-react";
+import { departmentsService } from "@/services/departments";
+import type { Department } from "@/types/hr";
+import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, ChevronDown, Download, Upload, X, Filter } from "lucide-react";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 
 interface Employee {
@@ -46,6 +48,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [brokenPhotos, setBrokenPhotos] = useState<Record<number, boolean>>({});
@@ -94,9 +98,19 @@ export default function EmployeesPage() {
       return;
     }
     fetchEmployees();
+    fetchDepartments();
     // We intentionally fetch once; search/pagination happen client-side to avoid extra API calls.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const { data } = await departmentsService.list();
+      setDepartments(data);
+    } catch (err) {
+      console.error("Failed to fetch departments", err);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -243,12 +257,14 @@ export default function EmployeesPage() {
 
   const filteredEmployees = employees.filter((emp) => {
     const term = search.trim().toLowerCase();
-    if (!term) return true;
-    return (
+    const matchesSearch = !term || (
       emp.employee_code?.toLowerCase().includes(term) ||
       `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(term) ||
       emp.email?.toLowerCase().includes(term)
     );
+    const matchesDept = !selectedDepartment || emp.department === selectedDepartment;
+
+    return matchesSearch && matchesDept;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / perPage));
@@ -300,18 +316,42 @@ export default function EmployeesPage() {
 
         {/* Search & Filter Bar */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative flex-1 w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or ID..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full sm:max-w-2xl">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name, email, or ID..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
+              />
+            </div>
+            
+            <div className="relative w-full sm:w-48">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedDepartment}
+                onChange={(e) => {
+                  setSelectedDepartment(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 appearance-none cursor-pointer"
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
           </div>
           
           <div className="flex items-center gap-3 w-full sm:w-auto">
