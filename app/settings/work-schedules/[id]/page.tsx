@@ -82,7 +82,7 @@ export default function WorkScheduleDetailPage() {
           </div>
           <Link
             href="/settings/work-schedules/create"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow"
           >
             <NotebookPen className="w-4 h-4" />
             New Schedule
@@ -108,7 +108,7 @@ export default function WorkScheduleDetailPage() {
             <p className="text-gray-500 mt-1">It may have been removed or never existed.</p>
             <button
               onClick={() => router.push('/settings/work-schedules')}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow"
             >
               Back to list
             </button>

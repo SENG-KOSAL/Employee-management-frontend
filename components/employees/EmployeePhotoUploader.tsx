@@ -110,7 +110,7 @@ export default function EmployeePhotoUploader({ employeeId, photoUrl, onUploaded
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm text-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow text-sm disabled:opacity-50"
               onClick={handleUpload}
               disabled={uploading || !file}
               title={!file ? "Select a file first" : ""}

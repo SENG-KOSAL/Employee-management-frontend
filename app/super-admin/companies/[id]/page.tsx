@@ -345,7 +345,7 @@ export default function CompanyDetailPage() {
           <button
             onClick={save}
             disabled={saving || deleting}
-            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium disabled:opacity-50 shadow-sm hover:shadow"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>

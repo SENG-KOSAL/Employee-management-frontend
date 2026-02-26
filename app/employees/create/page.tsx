@@ -316,51 +316,28 @@ export default function CreateEmployeePage() {
 
   const validateForm = () => {
     setDepartmentError("");
-    if (!formData.first_name || !formData.last_name) {
-      setError("First name and last name are required");
-      return false;
-    }
     const missing: string[] = [];
-    const employeeCode = String(formData.employee_code ?? "").trim();
-    const firstName = String(formData.first_name ?? "").trim();
-    const lastName = String(formData.last_name ?? "").trim();
+    const fullName = `${String(formData.first_name ?? "").trim()} ${String(formData.last_name ?? "").trim()}`.trim() || String(formData.name ?? "").trim();
     const email = String(formData.email ?? "").trim();
     const phone = String(formData.phone ?? "").trim();
     const dateOfBirth = String(formData.date_of_birth ?? "").trim();
-    const address = String(formData.address ?? "").trim();
     const department = String(formData.department ?? "").trim();
-    const position = String(formData.position ?? "").trim();
-    const startDate = String(formData.start_date ?? "").trim();
-    const status = String(formData.status ?? "").trim();
-    const accountName = String(formData.name ?? "").trim();
-    const role = String(formData.role ?? "").trim();
+    const joinDate = String(formData.start_date ?? "").trim();
     const password = String(formData.password ?? "");
     const confirmPassword = String(formData.confirm_password ?? "");
-    const salaryValue = Number(formData.salary);
 
-    if (!employeeCode) missing.push("Employee Code");
-    if (!firstName) missing.push("First Name");
-    if (!lastName) missing.push("Last Name");
+    if (!fullName) missing.push("Name");
     if (!email) missing.push("Email");
-    if (!phone) missing.push("Phone");
+    if (!phone) missing.push("Phone Number");
     if (!dateOfBirth) missing.push("Date of Birth");
-    if (!address) missing.push("Address");
-    if (!department) missing.push("Department");
-    if (!position) missing.push("Position");
-    if (!startDate) missing.push("Start Date");
-    if (!Number.isFinite(salaryValue) || salaryValue <= 0) missing.push("Salary");
-    if (!status) missing.push("Status");
-    if (!accountName) missing.push("User Account Name");
-    if (!role) missing.push("Role");
-    if (!password) missing.push("Password");
-    if (!confirmPassword) missing.push("Confirm Password");
+    if (!joinDate) missing.push("Join Date");
 
     if (missing.length > 0) {
       setError(`Please fill all required fields: ${missing.join(", ")}`);
       return false;
     }
 
-    if (password !== confirmPassword) {
+    if ((password || confirmPassword) && password !== confirmPassword) {
       setError("Passwords do not match");
       return false;
     }
@@ -370,7 +347,7 @@ export default function CreateEmployeePage() {
       return false;
     }
 
-    if (!isValidDepartmentName(department)) {
+    if (department && !isValidDepartmentName(department)) {
       setDepartmentError("Please select a department from the list.");
       setError("Please select a valid department");
       return false;
@@ -391,8 +368,10 @@ export default function CreateEmployeePage() {
       const payload = {
         first_name: formData.first_name,
         last_name: formData.last_name,
+        name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
         email: formData.email,
         phone: formData.phone,
+        phone_number: formData.phone,
         employee_code: formData.employee_code,
         gender: formData.gender,
         date_of_birth: formData.date_of_birth,
@@ -400,6 +379,7 @@ export default function CreateEmployeePage() {
         department: formData.department,
         position: formData.position,
         start_date: formData.start_date,
+        join_date: formData.start_date,
         salary: formData.salary,
         status: formData.status,
         nationality: formData.nationality,
@@ -410,7 +390,6 @@ export default function CreateEmployeePage() {
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
         emergency_contact_relationship: formData.emergency_contact_relationship,
-        name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
         password: formData.password,
         role: formData.role,
         benefits: {
@@ -625,7 +604,7 @@ export default function CreateEmployeePage() {
                         <User className="w-12 h-12 stroke-1" />
                       )}
                     </div>
-                    <label className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg cursor-pointer transition-transform hover:scale-105 active:scale-95" title="Upload Photo">
+                    <label className="absolute bottom-0 right-0 p-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-full shadow-lg cursor-pointer transition-transform hover:scale-105 active:scale-95" title="Upload Photo">
                       <Upload className="w-4 h-4" />
                       <input
                         type="file"
@@ -662,7 +641,7 @@ export default function CreateEmployeePage() {
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Employee Code <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Employee Code</label>
                         <input
                           type="text"
                           name="employee_code"
@@ -670,29 +649,26 @@ export default function CreateEmployeePage() {
                           onChange={handleInputChange}
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900 placeholder:text-gray-400"
                           placeholder="EMP-001"
-                          required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">First Name <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">First Name</label>
                         <input
                           type="text"
                           name="first_name"
                           value={formData.first_name}
                           onChange={handleInputChange}
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                          required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Last Name <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Last Name</label>
                         <input
                           type="text"
                           name="last_name"
                           value={formData.last_name}
                           onChange={handleInputChange}
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                          required
                         />
                       </div>
                       <div className="sm:col-span-2">
@@ -704,11 +680,10 @@ export default function CreateEmployeePage() {
                           onChange={handleInputChange}
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900 placeholder:text-gray-400"
                           placeholder="employee@company.com"
-                          required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number <span className="text-red-500">*</span></label>
                         <input
                           type="tel"
                           name="phone"
@@ -737,7 +712,7 @@ export default function CreateEmployeePage() {
                         </div>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Date of Birth</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
                         <input
                           type="date"
                           name="date_of_birth"
@@ -816,18 +791,17 @@ export default function CreateEmployeePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Start Date <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Join Date <span className="text-red-500">*</span></label>
                         <input
                           type="date"
                           name="start_date"
                           value={formData.start_date}
                           onChange={handleInputChange}
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                          required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Salary ($) <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Salary ($)</label>
                         <input
                           type="number"
                           name="salary"
@@ -836,7 +810,6 @@ export default function CreateEmployeePage() {
                           min="0"
                           step="0.01"
                           className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                          required
                         />
                       </div>
                        <div className="sm:col-span-2">
@@ -910,25 +883,23 @@ export default function CreateEmployeePage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Password <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
                     <input
                       type="password"
                       name="password"
                       value={formData.password}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
                     <input
                       type="password"
                       name="confirm_password"
                       value={formData.confirm_password}
                       onChange={handleInputChange}
                       className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
-                      required
                     />
                   </div>
                 </div>
@@ -1425,7 +1396,7 @@ export default function CreateEmployeePage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all font-medium text-sm shadow-md hover:shadow-lg flex items-center gap-2"
+                className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed transition-all font-medium text-sm shadow-md hover:shadow-lg flex items-center gap-2"
               >
                 {loading ? (
                     <>

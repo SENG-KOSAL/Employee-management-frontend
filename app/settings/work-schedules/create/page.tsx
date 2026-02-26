@@ -197,7 +197,7 @@ export default function CreateWorkSchedulePage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {saving ? 'Saving...' : 'Create Schedule'}
               </button>

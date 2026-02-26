@@ -339,7 +339,7 @@ export default function PayrollDashboardPage() {
 
               <button
                 onClick={() => router.push("/payroll/create")}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
               >
                 <Plus className="w-4 h-4" /> Create Payroll
               </button>
@@ -618,7 +618,7 @@ export default function PayrollDashboardPage() {
                               <button
                                 onClick={() => approveRun(run.id)}
                                 disabled={actionId === run.id && actionType === "approve"}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1 disabled:opacity-60"
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow inline-flex items-center gap-1 disabled:opacity-60"
                               >
                                 <CheckCircle className="w-4 h-4" />
                                 {actionId === run.id && actionType === "approve" ? "Approving..." : "Approve"}
@@ -629,7 +629,7 @@ export default function PayrollDashboardPage() {
                               <button
                                 onClick={() => payRun(run.id)}
                                 disabled={actionId === run.id && actionType === "pay"}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-1 disabled:opacity-60"
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow inline-flex items-center gap-1 disabled:opacity-60"
                               >
                                 <DollarSign className="w-4 h-4" />
                                 {actionId === run.id && actionType === "pay" ? "Paying..." : "Mark Paid"}

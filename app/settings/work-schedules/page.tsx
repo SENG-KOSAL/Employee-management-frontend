@@ -71,7 +71,7 @@ export default function WorkSchedulesListPage() {
           <div className="flex gap-2">
             <Link
               href="/settings/work-schedules/create"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow"
             >
               <Plus className="w-4 h-4" />
               Create Schedule
@@ -101,7 +101,7 @@ export default function WorkSchedulesListPage() {
             <div className="mt-4">
               <Link
                 href="/settings/work-schedules/create"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow"
               >
                 <Plus className="w-4 h-4" />
                 Create Schedule

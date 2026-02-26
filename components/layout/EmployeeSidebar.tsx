@@ -129,7 +129,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
       <Sidebar collapsible="icon" className="border-r border-gray-200 bg-white">
         <SidebarHeader className="border-b border-gray-100 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">HR</div>
+            <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm shadow-sm">HR</div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
               <span className="text-sm font-semibold text-gray-900">Employee</span>
               <span className="text-xs text-gray-500">Portal</span>

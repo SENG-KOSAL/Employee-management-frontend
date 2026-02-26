@@ -1469,7 +1469,7 @@ export default function EditEmployeePage() {
                     type="button"
                     onClick={handleDocumentsUpload}
                     disabled={documentsUploading || !hasSelectedDocuments}
-                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
                   >
                     {documentsUploading ? "Uploading..." : "Upload / Update"}
                   </button>
@@ -1514,7 +1514,7 @@ export default function EditEmployeePage() {
                         type="button"
                         disabled={!benefitToAdd || addingBenefit}
                         onClick={addBenefitFromCatalog}
-                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg disabled:opacity-50 hover:bg-blue-700"
+                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-lg disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
                       >
                         {addingBenefit ? "Adding..." : "Add"}
                       </button>
@@ -1590,7 +1590,7 @@ export default function EditEmployeePage() {
                         type="button"
                         disabled={!deductionToAdd || addingDeduction}
                         onClick={addDeductionFromCatalog}
-                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg disabled:opacity-50 hover:bg-blue-700"
+                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-lg disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
                       >
                         {addingDeduction ? "Adding..." : "Add"}
                       </button>
@@ -1738,7 +1738,7 @@ export default function EditEmployeePage() {
                       type="button"
                       onClick={addAllocation}
                       disabled={allocLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
                     >
                       {allocLoading ? "Saving..." : "Assign allocation"}
                     </button>
@@ -1832,7 +1832,7 @@ export default function EditEmployeePage() {
                                   type="button"
                                   onClick={() => saveAllocationEdit(alloc.id)}
                                   disabled={allocLoading}
-                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                  className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
                                 >
                                   Save
                                 </button>
@@ -1901,7 +1901,7 @@ export default function EditEmployeePage() {
                       type="button"
                       onClick={handleAssignSchedule}
                       disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-md shadow-sm hover:from-blue-700 hover:to-indigo-700 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {assigningSchedule ? "Assigning..." : "Assign"}
                     </button>
@@ -1946,7 +1946,7 @@ export default function EditEmployeePage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+                className="flex-1 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all shadow-md hover:shadow-lg font-medium"
               >
                 {saving ? "Saving..." : "Save Changes"}
               </button>

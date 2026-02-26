@@ -139,7 +139,7 @@ export default function SuperAdminConsole() {
           </div>
           <button
             onClick={() => router.push("/super-admin/companies/create")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm hover:shadow"
           >
             <Plus className="w-4 h-4" />
             New Companyddddd

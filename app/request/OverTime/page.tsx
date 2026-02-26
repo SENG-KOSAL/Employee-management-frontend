@@ -307,7 +307,7 @@ export default function OverTimeRequestPage() {
 									<button
 										type="submit"
 										disabled={saving || !selectedEmployeeId || !otDate || !otHours}
-										className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98]"
+										className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98]"
 									>
 										{saving ? "Saving..." : "Add Record"}
 									</button>

@@ -562,7 +562,7 @@ export default function AttendancePage() {
                   <button
                     onClick={() => handleAdminClock("in")}
                     disabled={!actionEmployeeId || adminClocking}
-                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium shadow-sm shadow-blue-200"
+                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-colors font-medium shadow-sm hover:shadow shadow-blue-200"
                   >
                     <Clock className="w-4 h-4" /> Clock In
                   </button>

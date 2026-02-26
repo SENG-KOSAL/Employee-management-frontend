@@ -114,7 +114,7 @@ export function RoleGate({
       <button
         type="button"
         onClick={() => router.replace("/dashboard")}
-        className="mt-4 inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+        className="mt-4 inline-flex items-center px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
       >
         Go to dashboard
       </button>

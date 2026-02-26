@@ -88,7 +88,7 @@ export default function BenefitForm(props: {
       <button
         type="submit"
         disabled={loading}
-        className="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
+        className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60 transition-all"
       >
         {loading ? 'Saving...' : 'Add'}
       </button>

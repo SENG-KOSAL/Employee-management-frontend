@@ -177,7 +177,7 @@ export default function UsersPermissionsPage() {
               type="button"
               onClick={handleCreatePermission}
               disabled={creating || !createKey.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
             >
               <Plus className="w-4 h-4" /> {creating ? "Creating..." : "Create"}
             </button>
@@ -292,7 +292,7 @@ export default function UsersPermissionsPage() {
                 type="button"
                 onClick={handleSaveRolePermissions}
                 disabled={saving || roleLoading || loading || isAdminRoleSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

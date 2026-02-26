@@ -204,7 +204,7 @@ export default function LeaveRequestsPage() {
             </button>
             <button
               onClick={() => router.push("/leave-requests/create")}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
             >
               <Plus className="w-4 h-4" /> New Request
             </button>

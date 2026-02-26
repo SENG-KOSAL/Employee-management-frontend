@@ -437,7 +437,7 @@ export default function PayrollRunDetailPage() {
                 <button
                   onClick={approveRun}
                   disabled={actionType === "approve"}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60"
                 >
                   <CheckCircle className="w-4 h-4" /> {actionType === "approve" ? "Approving..." : "Approve Run"}
                 </button>
@@ -446,7 +446,7 @@ export default function PayrollRunDetailPage() {
                 <button
                   onClick={markPaid}
                   disabled={actionType === "pay"}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow disabled:opacity-60"
                 >
                   <DollarSign className="w-4 h-4" /> {actionType === "pay" ? "Marking..." : "Mark as Paid"}
                 </button>
@@ -641,7 +641,7 @@ export default function PayrollRunDetailPage() {
                                       <button
                                         onClick={submitEdit}
                                         disabled={savingEdit}
-                                        className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                        className="px-3 py-1.5 rounded bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60"
                                       >
                                         {savingEdit ? "Saving..." : "Save changes"}
                                       </button>

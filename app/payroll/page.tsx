@@ -240,7 +240,7 @@ export default function PayrollPage() {
             </button>
             <button
               onClick={() => router.push("/payroll/create")}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
             >
               Create / Generate Payroll
             </button>
@@ -300,7 +300,7 @@ export default function PayrollPage() {
               </button>
               <button
                 onClick={() => fetchRuns()}
-                className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
               >
                 Apply
               </button>
@@ -360,7 +360,7 @@ export default function PayrollPage() {
                               <button
                                 onClick={() => approveRun(run.id)}
                                 disabled={isApproveLoading}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1"
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
                               >
                                 <CheckCircle className="w-4 h-4" /> {isApproveLoading ? "Approving..." : "Approve"}
                               </button>
@@ -369,7 +369,7 @@ export default function PayrollPage() {
                               <button
                                 onClick={() => payRun(run.id)}
                                 disabled={isPayLoading}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 inline-flex items-center gap-1"
+                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
                               >
                                 <DollarSign className="w-4 h-4" /> {isPayLoading ? "Paying..." : "Mark Paid"}
                               </button>

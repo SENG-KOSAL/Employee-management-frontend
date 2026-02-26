@@ -205,7 +205,7 @@ export default function PayslipsPage() {
                           </button>
                           <button
                             onClick={() => downloadPayslip(row)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1"
+                            className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow inline-flex items-center gap-1"
                           >
                             <Download className="w-4 h-4" /> PDF
                           </button>

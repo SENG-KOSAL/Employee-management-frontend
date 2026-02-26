@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, Download, Upload, X } from "lucide-react";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 
 interface Employee {
@@ -30,6 +30,17 @@ interface Employee {
   } | null;
 }
 
+interface ImportErrorItem {
+  row: number;
+  messages: string[];
+}
+
+interface ImportResult {
+  success_count: number;
+  failed_count: number;
+  errors: ImportErrorItem[];
+}
+
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +49,12 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [brokenPhotos, setBrokenPhotos] = useState<Record<number, boolean>>({});
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState("");
 
   const getApiErrorMessage = (err: unknown, fallback: string) => {
     const msg =
@@ -147,6 +164,83 @@ export default function EmployeesPage() {
     }
   };
 
+  const getFileNameFromContentDisposition = (headerValue?: string): string => {
+    if (!headerValue) return "employee-import-template.xlsx";
+    const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+    const simpleMatch = headerValue.match(/filename="?([^";]+)"?/i);
+    if (simpleMatch?.[1]) return simpleMatch[1];
+    return "employee-import-template.xlsx";
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true);
+      const response = await api.get("/api/v1/admin/employees/template", {
+        responseType: "blob",
+      });
+
+      const fileName = getFileNameFromContentDisposition(response.headers?.["content-disposition"]);
+      const blob = new Blob([response.data], {
+        type:
+          response.headers?.["content-type"] ||
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to download template"));
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleImportEmployees = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importFile) {
+      setImportError("Please choose an .xlsx file.");
+      return;
+    }
+
+    try {
+      setImporting(true);
+      setImportError("");
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const res = await api.post("/api/v1/admin/employees/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const payload = res.data?.data || res.data || {};
+      const normalizedResult: ImportResult = {
+        success_count: Number(payload.success_count || 0),
+        failed_count: Number(payload.failed_count || 0),
+        errors: Array.isArray(payload.errors)
+          ? payload.errors.map((item: any) => ({
+              row: Number(item?.row || 0),
+              messages: Array.isArray(item?.messages)
+                ? item.messages.map((m: unknown) => String(m))
+                : [],
+            }))
+          : [],
+      };
+
+      setImportResult(normalizedResult);
+      await fetchEmployees();
+    } catch (err) {
+      setImportError(getApiErrorMessage(err, "Failed to import employees"));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const filteredEmployees = employees.filter((emp) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
@@ -173,13 +267,35 @@ export default function EmployeesPage() {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Members</h1>
             <p className="text-gray-500 mt-1 text-sm">Manage your employees, roles, and permissions.</p>
           </div>
-          <Link
-            href="/employees/create"
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 font-medium group"
-          >
-            <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            Add New Employee
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/employees/create"
+              className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Employee
+            </Link>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              {downloadingTemplate ? "Downloading..." : "Download Template"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowImportModal(true);
+                setImportError("");
+              }}
+              className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              Import Employees
+            </button>
+          </div>
         </div>
 
         {/* Search & Filter Bar */}
@@ -313,14 +429,14 @@ export default function EmployeesPage() {
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Link
                               href={`/employees/${emp.id}/edit`}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
                               title="Edit Employee"
                             >
                               <Edit2 className="w-4 h-4" />
                             </Link>
                             <button
                               onClick={() => handleDeleteEmployee(emp.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-100"
                               title="Delete Employee"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -343,7 +459,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Previous
@@ -351,7 +467,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       Next
                       <ChevronRight className="w-4 h-4" />
@@ -363,6 +479,98 @@ export default function EmployeesPage() {
           </>
         )}
       </div>
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowImportModal(false)} />
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Import Employees</h3>
+                <p className="text-sm text-gray-500">Upload Excel (.xlsx) file to bulk create employees.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleImportEmployees} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Excel file</label>
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setImportFile(file);
+                    setImportResult(null);
+                    setImportError("");
+                  }}
+                  className="w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+
+              {importError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {importError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={importing}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Upload className="w-4 h-4" />
+                  {importing ? "Importing..." : "Import"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              {importResult && (
+                <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-900">Import Result</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg bg-green-50 border border-green-100 p-3">
+                      <p className="text-xs text-green-700 font-semibold uppercase">Success Count</p>
+                      <p className="text-xl font-bold text-green-700">{importResult.success_count}</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
+                      <p className="text-xs text-amber-700 font-semibold uppercase">Failed Count</p>
+                      <p className="text-xl font-bold text-amber-700">{importResult.failed_count}</p>
+                    </div>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div className="rounded-lg border border-red-100 bg-white p-3">
+                      <p className="text-sm font-semibold text-red-700 mb-2">Row Errors</p>
+                      <ul className="space-y-1 text-sm text-red-700 max-h-52 overflow-auto pr-1">
+                        {importResult.errors.map((item, idx) => (
+                          <li key={`${item.row}-${idx}`}>
+                            Row {item.row}: {item.messages.join(", ")}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </HRMSSidebar>
   );
 }

@@ -60,11 +60,11 @@ type MePayload = {
 
 const managerNavigation = {
   main: [
-    {
-      title: "Manager Portal",
-      icon: ShieldCheck,
-      href: "/manager",
-    },
+    // {
+    //   title: "Manager Portal",
+    //   icon: ShieldCheck,
+    //   href: "/manager",
+    // },
     {
       title: "My Profile",
       icon: Users,
@@ -102,11 +102,11 @@ const navigation = {
       icon: LayoutDashboard,
       href: "/dashboard",
     },
-    {
-      title: "Manager Portal",
-      icon: ShieldCheck,
-      href: "/manager",
-    },
+    // {
+    //   title: "Manager Portal",
+    //   icon: ShieldCheck,
+    //   href: "/manager",
+    // },
     {
       title: "Employee Management",
       icon: Users,
@@ -422,7 +422,7 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
         {/* Header with Logo */}
         <SidebarHeader className="border-b border-gray-100 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm shadow-sm">
               HR
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
@@ -448,25 +448,27 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <SidebarInset>
-        {/* Top Header Bar */}
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-gray-200 bg-white/80 backdrop-blur-md px-6">
-          <SidebarTrigger className="md:hidden" />
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-gray-800">{companyName}</h1>
-            <p className="text-xs text-gray-500 hidden sm:block">Overview of your organization</p>
+        {/* Top Header Bar - Modernized */}
+        <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b border-gray-200 bg-gradient-to-r from-white via-blue-50 to-white/80 backdrop-blur-md px-8 shadow-sm">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="md:hidden mr-2" />
+            <div className="flex flex-col">
+              <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight leading-tight">{companyName}</h1>
+              <span className="text-sm text-gray-500 font-medium">{isSupportMode ? "Support Mode" : "Management System"}</span>
+            </div>
           </div>
 
-          {isSuperAdmin ? <TenantSwitcher /> : null}
-          
-          <div className="flex items-center gap-2">
-              <div className="text-sm text-right hidden sm:block">
-                  <p className="text-xs text-gray-500">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-              </div>
+          <div className="flex items-center gap-6">
+            {isSuperAdmin ? <TenantSwitcher /> : null}
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-xs font-semibold text-gray-600">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              <span className="text-xs text-gray-400 mt-1">{new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gray-50 p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-white to-gray-100 p-8 rounded-xl shadow-inner">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   )
