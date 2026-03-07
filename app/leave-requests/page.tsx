@@ -229,13 +229,13 @@ export default function LeaveRequestsPage() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-500" : ""}`} /> <span className="hidden sm:inline">Refresh</span>
             </button>
-            <Link
+            {/* <Link
               href="/leave-requests/manager"
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md transition-all duration-200 font-semibold text-sm"
               title="Approval page"
             >
-              <ShieldCheck className="w-4 h-4 text-blue-600" /> <span className="hidden sm:inline">Approvals</span>
-            </Link>
+              <ShieldCheck className="w-4 h-4 text-blue-600" /> <span className="hidden sm:inline">Apprkkovals</span>
+            </Link> */}
             <button
               onClick={() => router.push("/leave-requests/create")}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"

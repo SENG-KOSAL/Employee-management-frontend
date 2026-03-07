@@ -157,6 +157,11 @@ export default function PrintAllPayslipsPage() {
                 key={p.id}
                 data={p}
                 companyName={company.name}
+                adjustments={[]}
+                adjustmentsLoading={false}
+                adjustmentsError=""
+                canAdjust={false}
+                onAddAdjustment={() => {}}
                 payrollRunId={runId as string}
                 idx={idx}
                 totalCount={payrolls.length}

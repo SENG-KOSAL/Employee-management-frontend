@@ -1,6 +1,14 @@
 import React from "react";
 import { currency, formatDate, capitalize } from "@/utils/format";
 
+export interface PayrollAdjustment {
+  id: number;
+  kind: "earning" | "deduction";
+  amount: number | string;
+  description: string;
+  created_at?: string | null;
+}
+
 export interface Employee {
   id: number;
   company_id?: number;
@@ -28,11 +36,17 @@ export interface PayslipData {
   net_pay: string;
   notes?: string | null;
   employee?: Employee;
+  company?: { name?: string } | null;
 }
 
 interface PayslipDocumentProps {
   data: PayslipData;
   companyName: string;
+  adjustments: PayrollAdjustment[];
+  adjustmentsLoading: boolean;
+  adjustmentsError: string;
+  canAdjust: boolean;
+  onAddAdjustment: () => void;
   payrollRunId?: string | number;
   idx?: number;
   totalCount?: number;
@@ -41,6 +55,11 @@ interface PayslipDocumentProps {
 export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
   data: p,
   companyName,
+  adjustments,
+  adjustmentsLoading,
+  adjustmentsError,
+  canAdjust,
+  onAddAdjustment,
   payrollRunId,
   idx = 0,
   totalCount = 1,
@@ -196,6 +215,75 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
                   {currency(Number(p.deductions_total || 0) + Number(p.unpaid_leave_deduction || 0))}
                 </td>
               </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-800 flex items-center justify-between gap-4">
+            <span>Adjustments</span>
+            <button
+              type="button"
+              onClick={onAddAdjustment}
+              disabled={!canAdjust}
+              className="print:hidden inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              + Add Adjustment
+            </button>
+          </div>
+          {!canAdjust && (
+            <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Adjustments are available after payroll is approved.
+            </div>
+          )}
+          {adjustmentsError && (
+            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {adjustmentsError}
+            </div>
+          )}
+          <table className="min-w-full text-sm text-left">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-2">Description</th>
+                <th className="px-4 py-2">Type</th>
+                <th className="px-4 py-2 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {adjustmentsLoading ? (
+                Array.from({ length: 2 }).map((_, index) => (
+                  <tr key={index} className="animate-pulse">
+                    <td className="px-4 py-3"><div className="h-4 w-40 rounded bg-gray-200" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-20 rounded bg-gray-200" /></td>
+                    <td className="px-4 py-3"><div className="ml-auto h-4 w-24 rounded bg-gray-200" /></td>
+                  </tr>
+                ))
+              ) : adjustments.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                    No manual adjustments added.
+                  </td>
+                </tr>
+              ) : (
+                adjustments.map((adjustment) => {
+                  const isEarning = adjustment.kind === "earning";
+                  const amount = Number(adjustment.amount || 0);
+
+                  return (
+                    <tr key={adjustment.id}>
+                      <td className="px-4 py-3 text-gray-800">{adjustment.description || "Adjustment"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isEarning ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                          {capitalize(adjustment.kind)}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 text-right font-semibold ${isEarning ? "text-emerald-600" : "text-red-600"}`}>
+                        {isEarning ? "+" : "-"}{currency(Math.abs(amount))}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -80,7 +80,7 @@ export default function EmployeePhotoUploader({ employeeId, photoUrl, onUploaded
   }
 
   return (
-    <div className={`relative inline-flex flex-col items-center rounded-full ${className}`}>
+    <div className={`relative inline-flex flex-col items-center gap-3 ${className}`}>
       <div 
         onClick={() => !uploading && !disabled && inputRef.current?.click()}
         className={`

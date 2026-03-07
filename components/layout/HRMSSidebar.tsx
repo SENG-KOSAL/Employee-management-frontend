@@ -133,9 +133,9 @@ const navigation = {
       icon: Wallet,
       items: [
         { title: "Dashboard", href: "/payroll/dashboard" },
-        { title: "Salary", href: "/salaries" },
-        { title: "Payslips", href: "/payslips" },
         { title: "Payroll", href: "/payroll" },
+        { title: "Payslips", href: "/payslips" },
+        { title: "Salary", href: "/salaries" },
       ],
     },
     // {
