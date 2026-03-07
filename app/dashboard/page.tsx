@@ -28,6 +28,7 @@ import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
 import { fetchMe } from "@/lib/meCache";
+import { isPlatformAdminRole, normalizeRole } from "@/lib/roles";
 
 function formatTime(date: string) {
   const now = new Date();
@@ -79,31 +80,17 @@ export default function DashboardPage() {
           return;
         }
 
-        const isTenantHost = () => {
-          if (typeof window === "undefined") return false;
-          const host = window.location.hostname;
-          if (!host || host === "localhost" || host === "127.0.0.1") return false;
-
-          const parts = host.split(".").filter(Boolean);
-          if (parts.length < 2) return false;
-
-          const sub = parts[0]?.toLowerCase();
-          if (!sub || sub === "platform" || sub === "app" || sub === "www") return false;
-          return true;
-        };
-
         const me = await fetchMe(false, { ttlMs: 5 * 60 * 1000 });
         if (me) {
           const meObj = me as unknown as Record<string, unknown>;
           const employeeObj = (meObj.employee && typeof meObj.employee === "object" ? (meObj.employee as Record<string, unknown>) : null);
           const roleRaw = (employeeObj?.role ?? meObj.role ?? "") as unknown;
-          const role = String(typeof roleRaw === "string" ? roleRaw : "").toLowerCase();
-          if (role === "super_admin") {
+          const role = normalizeRole(typeof roleRaw === "string" ? roleRaw : "");
+          if (isPlatformAdminRole(role)) {
             const activeCompanyId = typeof window !== "undefined" ? window.localStorage.getItem("active_company_id") : null;
-            // On the platform host, super_admin must select an active company.
-            // On tenant subdomains, allow super_admin to use the admin dashboard.
-            if (!activeCompanyId && !isTenantHost()) {
-              router.replace("/super-admin");
+            // Platform admins should only be on tenant dashboards when explicitly in support mode.
+            if (!activeCompanyId) {
+              router.replace("/super-admin/dashboard");
               return;
             }
           }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "http://127.0.0.1:8000";
+const BACKEND = (process.env.API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 function joinPath(parts: string[]): string {
   const cleaned = parts.map((p) => String(p || "").replace(/^\/+|\/+$/g, "")).filter(Boolean);

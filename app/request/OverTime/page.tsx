@@ -6,7 +6,7 @@ import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { overtimesService } from "@/services/overtimes";
 import { getToken } from "@/utils/auth";
-import { Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Plus, Search } from "lucide-react";
+import { Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Plus, Search, DollarSign, Trash2, X } from "lucide-react";
 
 type EmployeeOption = {
 	id: number;
@@ -42,6 +42,10 @@ export default function OverTimeRequestPage() {
 	const [otRate, setOtRate] = useState<string>("");
 	const [otReason, setOtReason] = useState<string>("");
 	const [saving, setSaving] = useState(false);
+	const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+	
+	const [employeeSearch, setEmployeeSearch] = useState("");
+	const [filteredEmployees, setFilteredEmployees] = useState<EmployeeOption[]>([]);
 
 	useEffect(() => {
 		const token = getToken();
@@ -75,6 +79,7 @@ export default function OverTimeRequestPage() {
 				employee_code: e.employee_code,
 			}));
 			setEmployees(normalized);
+			setFilteredEmployees(normalized);
 		} catch (err) {
 			console.error(err);
 			setEmployeesError("Failed to load employees");
@@ -83,6 +88,18 @@ export default function OverTimeRequestPage() {
 			setEmployeesLoading(false);
 		}
 	};
+
+	useEffect(() => {
+		if (!employeeSearch.trim()) {
+			setFilteredEmployees(employees);
+			return;
+		}
+		const term = employeeSearch.toLowerCase();
+		setFilteredEmployees(employees.filter(emp => {
+			const text = `${emp.first_name || ''} ${emp.last_name || ''} ${emp.employee_code || ''}`.toLowerCase();
+			return text.includes(term);
+		}));
+	}, [employeeSearch, employees]);
 
 	const loadOvertimes = async (empId: number) => {
 		try {
@@ -126,7 +143,7 @@ export default function OverTimeRequestPage() {
 			setOvertimes((prev) => [created, ...(Array.isArray(prev) ? prev : [])]);
 			setOtHours("");
 			setOtReason("");
-			setOtRate("");
+			// Leave date and rate as they were likely common defaults
 			setOvertimeSuccess("Overtime added");
 			setTimeout(() => setOvertimeSuccess(""), 1500);
 		} catch (err: any) {
@@ -134,6 +151,25 @@ export default function OverTimeRequestPage() {
 			setOvertimeError(err?.response?.data?.message || "Failed to add overtime");
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	const handleDelete = async (id: number) => {
+		try {
+			setOvertimeError("");
+			setOvertimeSuccess("");
+			// In case the service has a delete method:
+			// await overtimesService.delete(id); 
+			// If not, we just update local state for the UI mockup purpose or assume generic api call. 
+			await api.delete(`/api/v1/overtimes/${id}`);
+			setOvertimes(prev => prev.filter(ot => ot.id !== id));
+			setOvertimeSuccess("Record deleted");
+			setTimeout(() => setOvertimeSuccess(""), 1500);
+		} catch (err: any) {
+			console.error(err);
+			setOvertimeError("Failed to delete record");
+		} finally {
+			setDeleteConfirmId(null);
 		}
 	};
 
@@ -165,38 +201,110 @@ export default function OverTimeRequestPage() {
 				</div>
 			);
 		}
+		
+		const totalHours = overtimes.reduce((sum, ot) => sum + (Number(ot.hours) || 0), 0);
+		const totalPayout = overtimes.reduce((sum, ot) => {
+			const rate = Number(ot.rate) || 0;
+			const hours = Number(ot.hours) || 0;
+			return sum + (rate * hours);
+		}, 0);
+
 		return (
-			<div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
-				<table className="w-full text-left text-sm">
-					<thead className="bg-gray-50 border-b border-gray-200">
-						<tr>
-							<th className="px-5 py-3 font-semibold text-gray-600">Date</th>
-							<th className="px-5 py-3 font-semibold text-gray-600">Duration</th>
-							<th className="px-5 py-3 font-semibold text-gray-600">Reason</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-gray-100">
-						{overtimes.map((ot, idx) => (
-							<tr key={ot.id ?? idx} className="hover:bg-blue-50/30 transition-colors">
-								<td className="px-5 py-3.5 text-gray-900 font-medium">
-									<div className="flex items-center gap-2">
-										<Calendar className="w-4 h-4 text-gray-400" />
-										{ot.work_date || ot.date}
-									</div>
-								</td>
-								<td className="px-5 py-3.5">
-									<span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-										<Clock className="w-3 h-3" />
-										{ot.hours} hrs
-									</span>
-								</td>
-								<td className="px-5 py-3.5 text-gray-600 max-w-xs truncate">
-									{ot.reason || <span className="text-gray-400 italic">No reason provided</span>}
-								</td>
+			<div className="space-y-4">
+				<div className="grid grid-cols-2 gap-4">
+					<div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+						<div>
+							<p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Total OT Hours</p>
+							<p className="text-2xl font-bold text-gray-900 mt-1">{totalHours.toFixed(2)}</p>
+						</div>
+						<div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+							<Clock className="w-5 h-5 text-blue-600" />
+						</div>
+					</div>
+					<div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+						<div>
+							<p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Estimated Payout</p>
+							<p className="text-2xl font-bold text-gray-900 mt-1">${totalPayout.toFixed(2)}</p>
+						</div>
+						<div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+							<DollarSign className="w-5 h-5 text-green-600" />
+						</div>
+					</div>
+				</div>
+
+				<div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
+					<table className="w-full text-left text-sm">
+						<thead className="bg-gray-50 border-b border-gray-200">
+							<tr>
+								<th className="px-5 py-3 font-semibold text-gray-600">Date</th>
+								<th className="px-5 py-3 font-semibold text-gray-600">Duration</th>
+								<th className="px-5 py-3 font-semibold text-gray-600">Rate</th>
+								<th className="px-5 py-3 font-semibold text-gray-600">Total</th>
+								<th className="px-5 py-3 font-semibold text-gray-600">Reason</th>
+								<th className="px-5 py-3 font-semibold text-gray-600 text-right">Actions</th>
 							</tr>
-						))}
-					</tbody>
-				</table>
+						</thead>
+						<tbody className="divide-y divide-gray-100">
+							{overtimes.map((ot, idx) => {
+								const rate = Number(ot.rate) || 0;
+								const hours = Number(ot.hours) || 0;
+								const payout = rate * hours;
+								const recordId = ot.id ?? idx;
+								
+								return (
+									<tr key={recordId} className="hover:bg-blue-50/30 transition-colors group">
+										<td className="px-5 py-3.5 text-gray-900 font-medium">
+											<div className="flex items-center gap-2">
+												<Calendar className="w-4 h-4 text-gray-400" />
+												{ot.work_date || ot.date}
+											</div>
+										</td>
+										<td className="px-5 py-3.5">
+											<span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+												<Clock className="w-3 h-3" />
+												{ot.hours} hrs
+											</span>
+										</td>
+										<td className="px-5 py-3.5 text-gray-600">
+											{rate > 0 ? `$${rate.toFixed(2)}/hr` : '-'}
+										</td>
+										<td className="px-5 py-3.5 text-gray-900 font-medium">
+											{payout > 0 ? `$${payout.toFixed(2)}` : '-'}
+										</td>
+										<td className="px-5 py-3.5 text-gray-600 max-w-xs truncate">
+											{ot.reason || <span className="text-gray-400 italic">No reason provided</span>}
+										</td>
+										<td className="px-5 py-3.5 text-right">
+											{ot.id && (
+												<div className="flex justify-end relative">
+													{deleteConfirmId === ot.id ? (
+														<div className="flex items-center gap-2 bg-red-50 px-2 py-1 rounded-md border border-red-100 animate-in fade-in zoom-in duration-200">
+															<span className="text-xs text-red-600 font-medium whitespace-nowrap">Sure?</span>
+															<button onClick={() => handleDelete(ot.id!)} className="p-1 hover:bg-red-200 rounded text-red-700 transition-colors">
+																<CheckCircle2 className="w-4 h-4" />
+															</button>
+															<button onClick={() => setDeleteConfirmId(null)} className="p-1 hover:bg-red-200 rounded text-red-700 transition-colors">
+																<X className="w-4 h-4" />
+															</button>
+														</div>
+													) : (
+														<button 
+															onClick={() => setDeleteConfirmId(ot.id!)}
+															className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+															title="Delete Record"
+														>
+															<Trash2 className="w-4 h-4" />
+														</button>
+													)}
+												</div>
+											)}
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		);
 	};
@@ -224,17 +332,27 @@ export default function OverTimeRequestPage() {
 
 							<form onSubmit={handleCreate} className="p-6 space-y-5">
 								<div className="space-y-1.5">
-									<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Employee</label>
-									<div className="relative group">
-										<User className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+									<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Search & Select Employee</label>
+									<div className="relative border border-gray-200 rounded-xl overflow-hidden flex flex-col focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+										<div className="flex items-center pl-3 pr-3 bg-gray-50 border-b border-gray-200">
+											<Search className="w-4 h-4 text-gray-400 shrink-0" />
+											<input
+												type="text"
+												value={employeeSearch}
+												onChange={(e) => setEmployeeSearch(e.target.value)}
+												placeholder="Search name or ID..."
+												className="w-full py-2.5 pl-2 bg-transparent text-sm focus:outline-none text-black placeholder-gray-400"
+											/>
+										</div>
 										<select
-											className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+											className="w-full pl-3 pr-9 py-2.5 bg-gray-50 text-sm text-gray-900 focus:outline-none transition-all cursor-pointer appearance-none"
 											value={selectedEmployeeId}
 											onChange={(e) => setSelectedEmployeeId(e.target.value)}
 											disabled={employeesLoading}
+											size={1}
 										>
-											<option value="">Select employee</option>
-											{employees.map((emp) => (
+											<option value="">Select employee from list...</option>
+											{filteredEmployees.map((emp) => (
 												<option key={emp.id} value={emp.id}>
 													{emp.first_name} {emp.last_name} {emp.employee_code ? `• ${emp.employee_code}` : ""}
 												</option>
@@ -244,8 +362,8 @@ export default function OverTimeRequestPage() {
 									{employeesError && <p className="text-xs text-red-600 ml-1">{employeesError}</p>}
 								</div>
 
-								<div className="grid grid-cols-3 gap-4">
-									<div className="space-y-1.5">
+								<div className="grid grid-cols-1 gap-4">
+									<div className="space-y-1.5 w-full">
 										<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Date</label>
 										<div className="relative group">
 											<Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -257,34 +375,36 @@ export default function OverTimeRequestPage() {
 											/>
 										</div>
 									</div>
-									<div className="space-y-1.5">
-										<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Hours</label>
-										<div className="relative group">
-											<Clock className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-											<input
-												type="number"
-												min="0"
-												step="0.25"
-												className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-												value={otHours}
-												onChange={(e) => setOtHours(e.target.value)}
-												placeholder="e.g. 2.5"
-											/>
+									<div className="grid grid-cols-2 gap-4">
+										<div className="space-y-1.5">
+											<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Hours</label>
+											<div className="relative group">
+												<Clock className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+												<input
+													type="number"
+													min="0"
+													step="0.25"
+													className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+													value={otHours}
+													onChange={(e) => setOtHours(e.target.value)}
+													placeholder="e.g. 2.5"
+												/>
+											</div>
 										</div>
-									</div>
-									<div className="space-y-1.5">
-										<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Rate</label>
-										<div className="relative group">
-											<Clock className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-											<input
-												type="number"
-												min="0"
-												step="0.01"
-												className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
-												value={otRate}
-												onChange={(e) => setOtRate(e.target.value)}
-												placeholder="e.g. 12.50"
-											/>
+										<div className="space-y-1.5">
+											<label className="text-xs font-semibold text-gray-500 uppercase tracking-wide ml-1">Rate ($)</label>
+											<div className="relative group">
+												<DollarSign className="absolute left-3 top-3 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+												<input
+													type="number"
+													min="0"
+													step="0.01"
+													className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+													value={otRate}
+													onChange={(e) => setOtRate(e.target.value)}
+													placeholder="e.g. 15.00"
+												/>
+											</div>
 										</div>
 									</div>
 								</div>

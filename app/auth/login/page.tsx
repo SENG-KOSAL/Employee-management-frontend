@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import api from "@/services/api";
 import { useRouter } from "next/navigation";
 import { removeMe, saveMe, saveToken } from "@/utils/auth";
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
 import axios, { isAxiosError } from "axios";
 import { clearMeCache, fetchMe } from "@/lib/meCache";
+import { isPlatformAdminRole, normalizeRole } from "@/lib/roles";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -15,18 +15,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  const isTenantSubdomain = () => {
-    if (typeof window === "undefined") return false;
-    const host = window.location.hostname;
-    if (!host || host === "localhost" || host === "127.0.0.1") return false;
-
-    const parts = host.split(".").filter(Boolean);
-    if (parts.length < 2) return false;
-
-    const sub = parts[0]?.toLowerCase();
-    // Treat platform hosts like platform.local / app.local as non-tenant if you use them.
-    if (!sub || sub === "platform" || sub === "app" || sub === "www") return false;
-    return true;
+  const getRoleFromMe = (me: unknown) => {
+    if (!me || typeof me !== "object") return "";
+    const rec = me as Record<string, unknown>;
+    const employee = rec.employee;
+    const employeeRole = (() => {
+      if (!employee || typeof employee !== "object") return null;
+      const e = employee as Record<string, unknown>;
+      return typeof e.role === "string" ? e.role : null;
+    })();
+    const role = typeof rec.role === "string" ? rec.role : null;
+    return normalizeRole(employeeRole ?? role ?? "");
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -57,10 +56,10 @@ export default function LoginPage() {
           // Prefer backend login response user object (some backends don't support /me).
           const me = (loginUser && typeof loginUser === "object") ? loginUser : await fetchMe(true);
           if (me) saveMe(me);
-          const role = String((me as any)?.employee?.role || (me as any)?.role || "").toLowerCase();
+          const role = getRoleFromMe(me);
           const target =
-            role === "super_admin"
-              ? (isTenantSubdomain() ? "/dashboard" : "/super-admin")
+            isPlatformAdminRole(role)
+              ? "/super-admin/dashboard"
               : role === "employee"
                 ? "/employee"
                 : role === "manager"
@@ -68,7 +67,11 @@ export default function LoginPage() {
                   : "/dashboard";
           setTimeout(() => router.push(target), 300);
         } catch {
-          setTimeout(() => router.push("/dashboard"), 300);
+          const fallbackRole = getRoleFromMe(loginUser);
+          const fallbackTarget = isPlatformAdminRole(fallbackRole)
+            ? "/super-admin/dashboard"
+            : "/dashboard";
+          setTimeout(() => router.push(fallbackTarget), 300);
         }
       }
       //not working yet
@@ -81,6 +84,7 @@ export default function LoginPage() {
       if (isAxiosError(err)) {
         const data = err.response?.data as unknown;
         const fallback = "Wrong username or password.";
+        const proxyFallback = "Login request failed. Check frontend API proxy/backend URL.";
 
         const status = err.response?.status;
         const looksLikeInvalidCredentials = (msg: string) => {
@@ -92,6 +96,14 @@ export default function LoginPage() {
             m.includes("incorrect")
           );
         };
+
+        if (typeof data === "string") {
+          const trimmed = data.trim().toLowerCase();
+          if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")) {
+            setMessage(proxyFallback);
+            return;
+          }
+        }
 
         if (data && typeof data === "object") {
           const rec = data as Record<string, unknown>;
@@ -113,9 +125,14 @@ export default function LoginPage() {
             return;
           }
 
+          if (status && status >= 500) {
+            setMessage(msg ?? proxyFallback);
+            return;
+          }
+
           setMessage(msg ?? fallback);
         } else {
-          setMessage(fallback);
+          setMessage(status && status >= 500 ? proxyFallback : fallback);
         }
       } else {
         setMessage("An unexpected error occurred. Please try again.");
