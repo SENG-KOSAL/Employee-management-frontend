@@ -67,6 +67,20 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
   const name = p.employee?.full_name || `${p.employee?.first_name || ""} ${p.employee?.last_name || ""}`.trim();
   const payDate = formatDate(p.paid_at || p.period_end);
   const payType = capitalize(p.status);
+  const companyLabel = companyName || p.employee?.company?.name || p.company?.name || "Company Name";
+  const companyInitials = companyLabel
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "CO";
+  const earningAdjustments = adjustments
+    .filter((adjustment) => adjustment.kind === "earning")
+    .reduce((sum, adjustment) => sum + Math.abs(Number(adjustment.amount || 0)), 0);
+  const deductionAdjustments = adjustments
+    .filter((adjustment) => adjustment.kind === "deduction")
+    .reduce((sum, adjustment) => sum + Math.abs(Number(adjustment.amount || 0)), 0);
+  const totalDeductions = Number(p.deductions_total || 0) + Number(p.unpaid_leave_deduction || 0) + deductionAdjustments;
 
   return (
     <div
@@ -76,12 +90,20 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
     >
       <div className="flex flex-col gap-6 border-b border-gray-200 pb-6">
         <div className="flex items-start justify-between gap-6">
-          <div>
-            <p className="text-xs uppercase text-blue-700 font-semibold">{companyName || "Company Name"}</p>
-            <h2 className="text-2xl font-bold text-gray-900">Payslip</h2>
-            <p className="text-sm text-gray-500">-</p>
-            <p className="text-sm text-gray-500">Phone: - • Email: -</p>
-            <p className="text-sm text-gray-500">Tax ID: -</p>
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-lg font-bold text-white shadow-sm">
+              {companyInitials}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-blue-700 font-semibold">{companyLabel}</p>
+              <h2 className="text-2xl font-bold text-gray-900">Payslip</h2>
+              <p className="mt-1 text-sm text-gray-500">Compensation statement for the selected payroll period.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">Employee: {p.employee?.employee_code || "-"}</span>
+                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">Payroll Run: {payrollRunId || "-"}</span>
+                <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">Status: {payType}</span>
+              </div>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-xs uppercase text-gray-500">Pay Date</p>
@@ -135,6 +157,24 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
               <p className="text-xs uppercase text-gray-500">Status</p>
               <p className="font-semibold">{payType}</p>
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Gross Earnings</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-900">{currency(Number(p.gross_pay || 0) + earningAdjustments)}</p>
+            <p className="mt-1 text-xs text-emerald-800">Includes base pay, overtime, benefits, and earning adjustments.</p>
+          </div>
+          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Total Deductions</p>
+            <p className="mt-1 text-2xl font-bold text-rose-900">{currency(totalDeductions)}</p>
+            <p className="mt-1 text-xs text-rose-800">Includes unpaid leave and manual deduction adjustments.</p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-white">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Net Pay</p>
+            <p className="mt-1 text-2xl font-bold">{currency(p.net_pay)}</p>
+            <p className="mt-1 text-xs text-slate-300">Final amount payable for this payroll cycle.</p>
           </div>
         </div>
       </div>

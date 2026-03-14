@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
+import PayrollStatCard from "@/components/payroll/PayrollStatCard";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
 import { RefreshCw, Search, Eye, Calendar, DollarSign, Users, TrendingUp, ChevronDown, Download, CheckCircle2 } from "lucide-react";
@@ -88,6 +89,42 @@ export default function SalariesPage() {
     return { headcount, monthly, yearly };
   }, [filtered]);
 
+  const activeCount = useMemo(
+    () => filtered.filter((row) => !row.status || row.status.toLowerCase() === "active").length,
+    [filtered]
+  );
+
+  const averageCompensation = totals.headcount > 0 ? totals.monthly / totals.headcount : 0;
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      setError("No salary rows to export");
+      return;
+    }
+
+    const headers = ["Employee Code", "Employee Name", "Department", "Position", "Status", "Monthly Salary"];
+    const safe = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rowsCsv = filtered.map((row) => [
+      row.employee_code || "",
+      row.full_name || `${row.first_name || ""} ${row.last_name || ""}`.trim(),
+      row.department || "",
+      row.position || "",
+      row.status || "Active",
+      row.salary || 0,
+    ].map(safe).join(","));
+
+    const csv = [headers.join(","), ...rowsCsv].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `salary-ledger-${period.toLowerCase().replace(/\s+/g, "-")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <HRMSSidebar>
       <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -125,6 +162,7 @@ export default function SalariesPage() {
               <RefreshCw className="w-4 h-4" /> Sync
             </button>
             <button
+              onClick={handleExport}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm text-sm font-medium transition-all"
             >
               <Download className="w-4 h-4" /> Export
@@ -134,52 +172,51 @@ export default function SalariesPage() {
 
         {/* Financial KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-sm font-medium text-slate-500">Active Headcount</p>
-              <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Users className="w-5 h-5" /></div>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900">{totals.headcount}</h3>
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-emerald-500"/> Stable vs last period</p>
-            </div>
-            <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full opacity-50 pointer-events-none"></div>
-          </div>
+          <PayrollStatCard
+            label="Active Headcount"
+            value={String(totals.headcount)}
+            helper={`${activeCount} active employees in current view`}
+            icon={<Users className="h-5 w-5" />}
+            tone="blue"
+          />
+          <PayrollStatCard
+            label="Base Payroll (Monthly)"
+            value={currency(totals.monthly)}
+            helper="Current monthly salary liability"
+            icon={<DollarSign className="h-5 w-5" />}
+            tone="green"
+          />
+          <PayrollStatCard
+            label="Annual Run-Rate"
+            value={currency(totals.yearly)}
+            helper="Projected annualized compensation"
+            icon={<TrendingUp className="h-5 w-5" />}
+            tone="indigo"
+          />
+          <PayrollStatCard
+            label="Avg. Compensation"
+            value={currency(averageCompensation)}
+            helper="Per employee / month"
+            icon={<DollarSign className="h-5 w-5" />}
+            tone="slate"
+            emphasis="inverted"
+          />
+        </div>
 
-          <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-sm font-medium text-slate-500">Base Payroll (Monthly)</p>
-              <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600"><DollarSign className="w-5 h-5" /></div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Compensation Summary</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">{activeCount} active</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">Period: {period}</span>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-700">Cycle: {cycleStatus}</span>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900">{currency(totals.monthly)}</h3>
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">Draft liabilities</p>
-            </div>
-            <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-full opacity-50 pointer-events-none"></div>
+            <p className="mt-3 text-sm text-slate-500">Use department filtering to isolate payroll impact before generating the next payroll run.</p>
           </div>
-
-          <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-sm font-medium text-slate-500">Annual Run-Rate</p>
-              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><TrendingUp className="w-5 h-5" /></div>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900">{currency(totals.yearly)}</h3>
-              <p className="text-xs text-slate-500 mt-1">Projected annualized</p>
-            </div>
-            <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-full opacity-50 pointer-events-none"></div>
-          </div>
-
-          <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl shadow-md flex flex-col justify-between relative overflow-hidden">
-            <div className="flex justify-between items-start mb-4">
-              <p className="text-sm font-medium text-slate-400">Avg. Compensation</p>
-              <div className="p-2 bg-slate-800 rounded-lg text-slate-300"><DollarSign className="w-5 h-5" /></div>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white">{totals.headcount > 0 ? currency(totals.monthly / totals.headcount) : "$0"}</h3>
-              <p className="text-xs text-slate-400 mt-1">Per employee / mo</p>
-            </div>
-            <div className="absolute -top-12 -left-12 w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Ledger Total</p>
+            <p className="mt-2 text-3xl font-bold text-slate-900">{currency(totals.monthly)}</p>
+            <p className="mt-2 text-sm text-slate-600">Filtered monthly salary total for the current ledger view.</p>
           </div>
         </div>
 

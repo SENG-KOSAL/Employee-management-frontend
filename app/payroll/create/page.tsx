@@ -17,6 +17,7 @@ type Employee = {
   position?: string | { title?: string | null; name?: string | null } | null;
   status?: string | null;
   employee_code?: string | null;
+  salary?: number | string | null;
 };
 
 type PayrollCreatePayload = {
@@ -54,6 +55,11 @@ const formatStatusLabel = (status: string) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
+
+const currency = (value?: number | string | null) => {
+  const amount = typeof value === "string" ? Number(value || 0) : Number(value || 0);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number.isFinite(amount) ? amount : 0);
+};
 
 const getMonthRange = (value: string) => {
   const [yearStr, monthStr] = value.split("-");
@@ -123,6 +129,7 @@ export default function PayrollCreatePage() {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -179,17 +186,22 @@ export default function PayrollCreatePage() {
         getEmployeeName(employee).toLowerCase().includes(term) ||
         (employee.employee_code || "").toLowerCase().includes(term);
       const matchesDepartment = !departmentFilter || getDepartmentName(employee) === departmentFilter;
+      const matchesRole = !roleFilter || getPositionName(employee) === roleFilter;
       const matchesStatus = !statusFilter || normalizeStatus(employee.status).toLowerCase() === statusFilter.toLowerCase();
 
-      return matchesSearch && matchesDepartment && matchesStatus;
+      return matchesSearch && matchesDepartment && matchesRole && matchesStatus;
     });
-  }, [departmentFilter, employees, search, statusFilter]);
+  }, [departmentFilter, employees, roleFilter, search, statusFilter]);
 
   const selectedEmployeeIdSet = useMemo(() => new Set(selectedEmployeeIds), [selectedEmployeeIds]);
 
   const includedCount = selectedEmployeeIds.length;
   const excludedCount = Math.max(0, employees.length - includedCount);
   const allVisibleSelected = visibleEmployees.length > 0 && visibleEmployees.every((employee) => selectedEmployeeIdSet.has(employee.id));
+  const estimatedPayroll = useMemo(
+    () => employees.reduce((sum, employee) => (selectedEmployeeIdSet.has(employee.id) ? sum + Number(employee.salary || 0) : sum), 0),
+    [employees, selectedEmployeeIdSet]
+  );
 
   const toggleEmployee = (employeeId: number) => {
     setSelectedEmployeeIds((current) =>
@@ -281,6 +293,16 @@ export default function PayrollCreatePage() {
     return Array.from(new Set([...defaultStatusOptions, ...employeeStatuses])).sort((a, b) => a.localeCompare(b));
   }, [employees]);
 
+  const roleOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        employees
+          .map((employee) => getPositionName(employee))
+          .filter((value) => value && value !== "—")
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [employees]);
+
   return (
     <HRMSSidebar>
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -346,7 +368,7 @@ export default function PayrollCreatePage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_200px_200px_200px]">
                     <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                       <Search className="h-4 w-4 text-gray-400" />
                       <input
@@ -376,6 +398,18 @@ export default function PayrollCreatePage() {
                       {departmentOptions.map((departmentName) => (
                         <option key={departmentName} value={departmentName}>
                           {departmentName}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">All roles</option>
+                      {roleOptions.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
                         </option>
                       ))}
                     </select>
@@ -415,9 +449,10 @@ export default function PayrollCreatePage() {
                       onClick={() => {
                         setSearch("");
                         setDepartmentFilter("");
+                        setRoleFilter("");
                         setStatusFilter("");
                       }}
-                      disabled={!search && !departmentFilter && !statusFilter}
+                      disabled={!search && !departmentFilter && !roleFilter && !statusFilter}
                       className="px-3 py-2 rounded-lg border border-transparent text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Clear Filters
@@ -533,9 +568,16 @@ export default function PayrollCreatePage() {
                     <div className="text-xs font-semibold uppercase text-gray-500">Estimated payroll headcount</div>
                     <div className="mt-1 text-2xl font-bold text-gray-900">{includedCount}</div>
                   </div>
+                  <div className="rounded-xl bg-emerald-50 px-4 py-3">
+                    <div className="text-xs font-semibold uppercase text-emerald-700">Estimated base salary</div>
+                    <div className="mt-1 text-2xl font-bold text-emerald-900">{currency(estimatedPayroll)}</div>
+                  </div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                   Payroll period: <span className="font-medium text-gray-900">{getMonthLabel(month)}</span>
+                </div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  Targeting filters now reflect department, role, and employment status so you can review exactly who will be included before generation.
                 </div>
                 <div className="flex flex-col gap-3">
                   <button

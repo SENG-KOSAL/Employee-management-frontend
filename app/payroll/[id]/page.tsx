@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User, Download, Printer } from "lucide-react";
+import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User, Download, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 
 type UserPayload = {
   role?: string | null;
@@ -122,9 +122,12 @@ export default function PayrollRunDetailPage() {
   const [data, setData] = useState<PayrollRunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [actionType, setActionType] = useState<"approve" | "pay" | null>(null);
   const [search, setSearch] = useState("");
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [editPayrollId, setEditPayrollId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     base_pay: "",
@@ -173,6 +176,16 @@ export default function PayrollRunDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, runId]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, showIssuesOnly, pageSize]);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => setSuccess(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [success]);
+
   const fetchUser = async () => {
     try {
       const res = await api.get("/api/v1/me");
@@ -211,6 +224,7 @@ export default function PayrollRunDetailPage() {
       setActionType("approve");
       await api.post(`/api/v1/payroll-runs/${runId}/approve`);
       fetchDetail();
+      setSuccess("Payroll run approved successfully.");
     } catch (err: unknown) {
       console.error(err);
       setError(getApiErrorMessage(err, "Failed to approve run"));
@@ -225,6 +239,7 @@ export default function PayrollRunDetailPage() {
       setActionType("pay");
       await api.post(`/api/v1/payroll-runs/${runId}/mark-paid`);
       fetchDetail();
+      setSuccess("Payroll run marked as paid.");
     } catch (err: unknown) {
       console.error(err);
       setError(getApiErrorMessage(err, "Failed to mark run as paid"));
@@ -325,6 +340,20 @@ export default function PayrollRunDetailPage() {
     router.push(`/payroll/${runId}/payslip/print-all?auto=1`);
   };
 
+  const issueSummary = useMemo(() => {
+    const totalIssues = filteredPayrolls.reduce((count, payroll) => count + issueFlags(payroll).length, 0);
+    const impactedEmployees = filteredPayrolls.filter((payroll) => issueFlags(payroll).length > 0).length;
+    return { totalIssues, impactedEmployees };
+  }, [filteredPayrolls]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPayrolls.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedPayrolls = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPayrolls.slice(start, start + pageSize);
+  }, [currentPage, filteredPayrolls, pageSize]);
+
   const startEdit = (p: PayrollItem) => {
     setError("");
     setEditPayrollId(p.id);
@@ -346,6 +375,7 @@ export default function PayrollRunDetailPage() {
       await api.patch(`/api/v1/payrolls/${editPayrollId}`, editForm);
       await fetchDetail();
       setEditPayrollId(null);
+      setSuccess("Payroll line updated.");
     } catch (err: unknown) {
       console.error(err);
       setError(getApiErrorMessage(err, "Failed to update payroll line"));
@@ -404,6 +434,7 @@ export default function PayrollRunDetailPage() {
       await loadAdjustments(adjustPayrollId);
       await fetchDetail();
       setAdjustForm({ kind: "earning", amount: "", description: "" });
+      setSuccess("Adjustment added successfully.");
     } catch (err: unknown) {
       console.error(err);
       setAdjustmentErrors((prev) => ({ ...prev, [adjustPayrollId]: getApiErrorMessage(err, "Failed to add adjustment") }));
@@ -451,6 +482,9 @@ export default function PayrollRunDetailPage() {
 
         {error && (
           <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">{error}</div>
+        )}
+        {success && (
+          <div className="p-3 rounded-lg border border-green-200 bg-green-50 text-sm text-green-700">{success}</div>
         )}
 
         {loading || !data ? (
@@ -526,6 +560,9 @@ export default function PayrollRunDetailPage() {
                   <AlertTriangle className="w-4 h-4 text-amber-500" /> Review checklist
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 font-semibold text-amber-700">
+                    {issueSummary.impactedEmployees} rows flagged • {issueSummary.totalIssues} issue{issueSummary.totalIssues === 1 ? "" : "s"}
+                  </span>
                   {Object.entries(statusCounts).map(([s, count]) => (
                     <span key={s} className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-semibold border ${statusBadge(s)}`}>
                       {s}: {count}
@@ -569,6 +606,15 @@ export default function PayrollRunDetailPage() {
                     placeholder="Search by name or code"
                     className="text-sm rounded-lg border border-gray-200 px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <select
+                    value={String(pageSize)}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="text-sm rounded-lg border border-gray-200 px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {[10, 20, 50].map((size) => (
+                      <option key={size} value={size}>{size} / page</option>
+                    ))}
+                  </select>
                   <div className="text-xs text-gray-500">Net pay and breakdown per employee.</div>
                 </div>
               </div>
@@ -591,7 +637,7 @@ export default function PayrollRunDetailPage() {
                     {filteredPayrolls.length === 0 ? (
                       <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No payrolls in this run</td></tr>
                     ) : (
-                      filteredPayrolls.map((p) => (
+                      paginatedPayrolls.map((p) => (
                         <tr key={p.id} className={`hover:bg-gray-50 ${issueFlags(p).length ? "bg-amber-50/40" : ""}`}>
                           <td className="px-4 py-3">
                             <div className="font-semibold text-gray-900">{p.employee?.full_name || `${p.employee?.first_name || ""} ${p.employee?.last_name || ""}`}</div>
@@ -648,10 +694,10 @@ export default function PayrollRunDetailPage() {
                               </button>
                             </div>
                             {(editPayrollId === p.id || adjustPayrollId === p.id) && (
-                              <div className="mt-3 text-left bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                              <div className="mt-3 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 text-left shadow-inner space-y-3">
                                 {editPayrollId === p.id && (
                                   <div className="space-y-2">
-                                    <div className="text-xs font-semibold text-gray-700">Edit payroll line (draft only)</div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Edit payroll line (draft only)</div>
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                       <label className="flex flex-col gap-1">
                                         <span className="text-xs text-gray-500">Base</span>
@@ -723,7 +769,7 @@ export default function PayrollRunDetailPage() {
 
                                 {adjustPayrollId === p.id && (
                                   <div className="space-y-2">
-                                    <div className="text-xs font-semibold text-gray-700">Add adjustment (approved/paid)</div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Add adjustment (approved/paid)</div>
                                     {!adjustmentsAllowed && (
                                       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                                         Adjustments are available after payroll is approved.
@@ -821,6 +867,32 @@ export default function PayrollRunDetailPage() {
                   </tbody>
                 </table>
               </div>
+              {filteredPayrolls.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  <p>
+                    Showing <span className="font-semibold text-gray-900">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-semibold text-gray-900">{Math.min(currentPage * pageSize, filteredPayrolls.length)}</span> of <span className="font-semibold text-gray-900">{filteredPayrolls.length}</span> payroll lines
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </button>
+                    <span className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

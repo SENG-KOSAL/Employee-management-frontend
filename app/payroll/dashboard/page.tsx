@@ -39,6 +39,7 @@ import {
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { RoleGate } from "@/components/auth/RoleGate";
 import api from "@/services/api";
+import PayrollStatCard from "@/components/payroll/PayrollStatCard";
 
 interface PayrollRun {
   id: number;
@@ -164,9 +165,31 @@ export default function PayrollDashboardPage() {
     fetchTrends();
   }, []);
 
+  const selectedMonthWindow = useMemo(() => {
+    if (!monthInput) return null;
+    const [yearStr, monthStr] = monthInput.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1;
+    if (Number.isNaN(year) || Number.isNaN(month)) return null;
+    const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const start = new Date(year, month - 11, 1, 0, 0, 0, 0);
+    return { start, end };
+  }, [monthInput]);
+
+  const filteredTrendRuns = useMemo(() => {
+    return trends.filter((run) => {
+      const runDate = new Date(run.period_start);
+      const matchesStatus = statusFilter ? (run.status || "").toLowerCase() === statusFilter.toLowerCase() : true;
+      const matchesWindow = selectedMonthWindow
+        ? runDate >= selectedMonthWindow.start && runDate <= selectedMonthWindow.end
+        : true;
+      return matchesStatus && matchesWindow;
+    });
+  }, [selectedMonthWindow, statusFilter, trends]);
+
   const chartData = useMemo(() => {
     // Sort chronological
-    const sorted = [...trends].sort((a, b) => 
+    const sorted = [...filteredTrendRuns].sort((a, b) => 
       new Date(a.period_start).getTime() - new Date(b.period_start).getTime()
     );
     return sorted.map(run => ({
@@ -175,11 +198,11 @@ export default function PayrollDashboardPage() {
       runId: run.id,
       netPay: Number(run.total_net_pay || 0),
     }));
-  }, [trends]);
+  }, [filteredTrendRuns]);
 
   const statusData = useMemo(() => {
     const counts: Record<string, number> = { Draft: 0, Approved: 0, Paid: 0 };
-    trends.forEach(r => {
+    filteredTrendRuns.forEach(r => {
       const s = (r.status || "Draft").toLowerCase();
       if (s === "paid") counts.Paid++;
       else if (s === "approved") counts.Approved++;
@@ -190,7 +213,7 @@ export default function PayrollDashboardPage() {
       { name: "Approved", value: counts.Approved, color: "#3b82f6" }, // blue-500
       { name: "Paid", value: counts.Paid, color: "#22c55e" }, // green-500
     ].filter(d => d.value > 0);
-  }, [trends]);
+  }, [filteredTrendRuns]);
 
   const filteredRuns = useMemo(() => {
     const status = statusFilter.trim().toLowerCase();
@@ -231,6 +254,33 @@ export default function PayrollDashboardPage() {
       })
       .slice(0, 5);
   }, [filteredRuns]);
+
+  const latestTrendComparison = useMemo(() => {
+    const sorted = [...filteredTrendRuns].sort(
+      (a, b) => new Date(a.period_start).getTime() - new Date(b.period_start).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    const previous = sorted[sorted.length - 2];
+
+    const buildDelta = (current: number, previousValue: number) => {
+      if (!previousValue) return { label: "No prior period", direction: "neutral" as const };
+      const diff = current - previousValue;
+      const percent = previousValue === 0 ? 0 : Math.abs((diff / previousValue) * 100);
+      if (diff === 0) return { label: "Flat vs prior period", direction: "neutral" as const };
+      return {
+        label: `${diff > 0 ? "+" : "-"}${percent.toFixed(1)}% vs prior period`,
+        direction: diff > 0 ? ("up" as const) : ("down" as const),
+      };
+    };
+
+    return {
+      payroll: buildDelta(Number(latest?.total_gross_pay || 0), Number(previous?.total_gross_pay || 0)),
+      net: buildDelta(Number(latest?.total_net_pay || 0), Number(previous?.total_net_pay || 0)),
+      taxes: buildDelta(Number(latest?.total_taxes || 0), Number(previous?.total_taxes || 0)),
+      deductions: buildDelta(Number(latest?.total_deductions || 0), Number(previous?.total_deductions || 0)),
+      employees: buildDelta(Number(latest?.payrolls_count || 0), Number(previous?.payrolls_count || 0)),
+    };
+  }, [filteredTrendRuns]);
 
   const approveRun = async (id: number) => {
     try {
@@ -596,66 +646,52 @@ export default function PayrollDashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-md p-5 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600"></div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase text-gray-500 font-bold tracking-wider">Gross Payroll</p>
-                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                  <Landmark className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-3xl font-extrabold text-gray-900">${stats.totalGrossPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">Selected Month</p>
-            </div>
-            
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-md p-5 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase text-gray-500 font-bold tracking-wider">Net Payroll</p>
-                <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-3xl font-extrabold text-gray-900">${stats.totalNetPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-emerald-600 mt-2 font-medium flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Actual Pay</p>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-md p-5 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-400 to-rose-600"></div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase text-gray-500 font-bold tracking-wider">Taxes</p>
-                <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
-                  <BarChart3 className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-3xl font-extrabold text-gray-900">${stats.totalTaxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">Est. Withholding</p>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-md p-5 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase text-gray-500 font-bold tracking-wider">Deductions</p>
-                <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-600">
-                  <Receipt className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-3xl font-extrabold text-gray-900">${stats.totalDeductions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-xs text-gray-400 mt-2 font-medium">Benefits & Other</p>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-md p-5 relative overflow-hidden group hover:shadow-lg transition-all">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-indigo-600"></div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase text-gray-500 font-bold tracking-wider">Employees</p>
-                <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <Users className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-3xl font-extrabold text-gray-900">{stats.payrolls}</p>
-              <p className="text-xs text-indigo-600 mt-2 font-medium flex items-center gap-1">Paid in period</p>
-            </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <PayrollStatCard
+              label="Gross Payroll"
+              value={`$${stats.totalGrossPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              helper="Selected filter scope"
+              icon={<Landmark className="h-4 w-4" />}
+              tone="blue"
+              deltaLabel={latestTrendComparison.payroll.label}
+              deltaDirection={latestTrendComparison.payroll.direction}
+            />
+            <PayrollStatCard
+              label="Net Payroll"
+              value={`$${stats.totalNetPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              helper="Actual employee take-home"
+              icon={<DollarSign className="h-4 w-4" />}
+              tone="green"
+              deltaLabel={latestTrendComparison.net.label}
+              deltaDirection={latestTrendComparison.net.direction}
+            />
+            <PayrollStatCard
+              label="Taxes"
+              value={`$${stats.totalTaxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              helper="Current withholding estimate"
+              icon={<BarChart3 className="h-4 w-4" />}
+              tone="rose"
+              deltaLabel={latestTrendComparison.taxes.label}
+              deltaDirection={latestTrendComparison.taxes.direction}
+            />
+            <PayrollStatCard
+              label="Deductions"
+              value={`$${stats.totalDeductions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              helper="Benefits and other deductions"
+              icon={<Receipt className="h-4 w-4" />}
+              tone="amber"
+              deltaLabel={latestTrendComparison.deductions.label}
+              deltaDirection={latestTrendComparison.deductions.direction}
+            />
+            <PayrollStatCard
+              label="Employees"
+              value={`${stats.payrolls}`}
+              helper="Included in filtered runs"
+              icon={<Users className="h-4 w-4" />}
+              tone="indigo"
+              deltaLabel={latestTrendComparison.employees.label}
+              deltaDirection={latestTrendComparison.employees.direction}
+            />
           </div>
 
           <div className="bg-white border border-gray-100 rounded-2xl shadow-md overflow-hidden">
