@@ -173,120 +173,159 @@ export default function DashboardPage() {
 
   return (
     <HRMSSidebar>
-      <div className="space-y-6 max-w-7xl">
+      <div className="max-w-[1400px] mx-auto space-y-8 py-8 px-4 sm:px-6 lg:px-8 bg-slate-50/50 min-h-[calc(100vh-4rem)]">
         {statsError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
-            {statsError}
+          <div className="p-4 bg-rose-50/80 backdrop-blur-sm border-l-4 border-rose-500 rounded-r-2xl text-rose-800 text-sm flex items-center gap-3 shadow-sm">
+            <svg className="w-6 h-6 flex-shrink-0 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+            <span className="font-medium text-base">{statsError}</span>
           </div>
         )}
 
-        {/* Header with Welcome & Quick Actions */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">Admin Dashboard</p>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome backkkkkkk, {user?.name || "Admin"}! 👋</h1>
-            <p className="text-gray-600 mt-1">Real-time overview of your organization</p>
+        {/* Animated & Colorful Header Banner */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-purple-600 to-blue-500 rounded-[2rem] p-8 sm:p-10 text-white shadow-xl shadow-indigo-500/20">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-4">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                <p className="text-xs font-bold text-indigo-50 uppercase tracking-widest">Admin Dashboard</p>
+              </div>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-2">
+                Welcome back, {user?.name || "Admin"}! <span className="inline-block animate-bounce origin-bottom hover:animate-none">👋</span>
+              </h1>
+              <p className="text-indigo-100/90 text-lg sm:text-xl font-medium max-w-2xl mt-3">
+                Here is the real-time overview of your organization today.
+              </p>
+            </div>
+            <button
+              onClick={refetch}
+              disabled={loadingStats}
+              className="group self-start md:self-center inline-flex items-center gap-3 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md text-white font-bold text-sm transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-5 h-5 group-hover:rotate-180 transition-transform duration-500 ${loadingStats ? "animate-spin" : ""}`} />
+              {loadingStats ? "Refreshing..." : "Refresh Stats"}
+            </button>
           </div>
-          <button
-            onClick={refetch}
-            disabled={loadingStats}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${loadingStats ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          {/* Decorative Background Elements */}
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none"></div>
+          <div className="absolute -bottom-24 right-40 w-96 h-96 bg-purple-400 opacity-20 rounded-full blur-3xl mix-blend-screen pointer-events-none"></div>
+          <div className="absolute top-1/2 left-0 w-64 h-64 bg-blue-400 opacity-20 rounded-full blur-3xl mix-blend-screen pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {statCards.map((stat, idx) => {
             const Icon = stat.icon;
+            // Map colors to vibrant gradient variants
+            const colorMap = {
+              "bg-blue-50 text-blue-600": { bg: "bg-blue-500", text: "text-blue-500", glow: "shadow-blue-500/20" },
+              "bg-green-50 text-green-600": { bg: "bg-emerald-500", text: "text-emerald-500", glow: "shadow-emerald-500/20" },
+              "bg-amber-50 text-amber-600": { bg: "bg-amber-500", text: "text-amber-500", glow: "shadow-amber-500/20" },
+              "bg-purple-50 text-purple-600": { bg: "bg-violet-500", text: "text-violet-500", glow: "shadow-violet-500/20" }
+            };
+            const mappedColor = colorMap[stat.color as keyof typeof colorMap] || colorMap["bg-blue-50 text-blue-600"];
+
             return (
               <button
                 key={idx}
                 onClick={() => router.push(stat.href)}
-                className={`group text-left bg-white rounded-2xl border ${stat.borderColor} shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all p-6 cursor-pointer`}
+                className="group relative text-left bg-white rounded-[2rem] border border-slate-100 p-6 sm:p-8 hover:-translate-y-1 transition-all duration-300 shadow-sm hover:shadow-xl overflow-hidden cursor-pointer"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`p-3 rounded-xl ${stat.color}`}>
-                    <Icon className="w-6 h-6" />
+                <div className={`absolute inset-0 bg-gradient-to-br from-white to-slate-50 opacity-100 group-hover:opacity-0 transition-opacity duration-300`}></div>
+                <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 bg-gradient-to-br from-${mappedColor.bg.replace("bg-", "")} to-slate-50 transition-opacity duration-300 pointer-events-none`}></div>
+                
+                <div className="relative z-10 flex items-start justify-between mb-6">
+                  <div className={`p-4 rounded-2xl bg-white shadow-md ${mappedColor.glow} ring-1 ring-slate-100 group-hover:scale-110 transition-transform duration-300`}>
+                    <Icon className={`w-7 h-7 ${mappedColor.text}`} />
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                  <div className="bg-slate-50 p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
+                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
-                <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                  {loadingStats ? (
-                    <span className="text-lg text-gray-400">Loading...</span>
-                  ) : (
-                    stat.value.toLocaleString()
-                  )}
-                </h3>
+                
+                <div className="relative z-10">
+                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">{stat.label}</p>
+                  <h3 className="text-4xl font-extrabold text-slate-800 tracking-tight">
+                    {loadingStats ? (
+                      <span className="inline-block w-16 h-10 bg-slate-200 rounded animate-pulse"></span>
+                    ) : (
+                      stat.value.toLocaleString()
+                    )}
+                  </h3>
+                </div>
               </button>
             );
           })}
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Weekly Attendance</h3>
-            <div className="h-75 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+              <span className="w-2 h-6 rounded-full bg-blue-500"></span>
+              Weekly Attendance
+            </h3>
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={attendanceData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: "#6B7280", fontSize: 12 }} 
-                    dy={10}
+                    tick={{ fill: "#64748b", fontSize: 13, fontWeight: 600 }} 
+                    dy={12}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                    tick={{ fill: "#64748b", fontSize: 13, fontWeight: 600 }} 
+                    dx={-10}
                   />
                   <RechartsTooltip 
-                    cursor={{ fill: "#F3F4F6" }}
-                    contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                    cursor={{ fill: "#f8fafc" }}
+                    contentStyle={{ borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", padding: "12px", fontWeight: "bold" }}
                   />
-                  <Legend wrapperStyle={{ paddingTop: "20px" }} />
-                  <Bar dataKey="present" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Present" barSize={32} />
-                  <Bar dataKey="absent" fill="#ef4444" radius={[4, 4, 0, 0]} name="Absent" barSize={32} />
-                  <Bar dataKey="late" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Late" barSize={32} />
+                  <Legend wrapperStyle={{ paddingTop: "24px", fontWeight: "bold", fontSize: "14px", color: "#475569" }} />
+                  <Bar dataKey="present" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Present" barSize={36} />
+                  <Bar dataKey="absent" fill="#f43f5e" radius={[6, 6, 0, 0]} name="Absent" barSize={36} />
+                  <Bar dataKey="late" fill="#f59e0b" radius={[6, 6, 0, 0]} name="Late" barSize={36} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Employee Growth</h3>
-            <div className="h-75 w-full">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
+              <span className="w-2 h-6 rounded-full bg-violet-500"></span>
+              Employee Growth
+            </h3>
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={employeeGrowthData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="month" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: "#6B7280", fontSize: 12 }} 
-                    dy={10}
+                    tick={{ fill: "#64748b", fontSize: 13, fontWeight: 600 }} 
+                    dy={12}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: "#6B7280", fontSize: 12 }} 
+                    tick={{ fill: "#64748b", fontSize: 13, fontWeight: 600 }} 
+                    dx={-10}
                   />
                   <RechartsTooltip 
-                    contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                    contentStyle={{ borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)", padding: "12px", fontWeight: "bold" }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="employees" 
                     stroke="#8b5cf6" 
                     strokeWidth={4} 
-                    dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} 
-                    activeDot={{ r: 6, strokeWidth: 0 }} 
+                    dot={{ r: 5, fill: "#8b5cf6", strokeWidth: 3, stroke: "#fff" }} 
+                    activeDot={{ r: 8, strokeWidth: 0 }} 
                     name="Total Employees" 
                   />
                 </LineChart>
@@ -296,67 +335,98 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button
             onClick={() => router.push("/leave-requests/create")}
-            className="group bg-linear-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
           >
-            <Calendar className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
-            <h3 className="font-bold text-lg">Create Leave Request</h3>
-            <p className="text-blue-100 text-sm mt-1">Submit leave on behalf</p>
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Calendar className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
+            </div>
+            <div className="relative z-10">
+              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
+                <Calendar className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="font-extrabold text-2xl tracking-tight">Leave Request</h3>
+              <p className="text-blue-100 text-sm mt-2 font-medium">Submit leave on behalf</p>
+            </div>
           </button>
+          
           <button
             onClick={() => router.push("/payroll")}
-            className="group bg-linear-to-br from-green-500 to-green-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-green-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
           >
-            <FileText className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
-            <h3 className="font-bold text-lg">Manage Payroll</h3>
-            <p className="text-green-100 text-sm mt-1">Generate and track runs</p>
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+              <FileText className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
+            </div>
+            <div className="relative z-10">
+              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
+                <FileText className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="font-extrabold text-2xl tracking-tight">Manage Payroll</h3>
+              <p className="text-green-100 text-sm mt-2 font-medium">Generate and track runs</p>
+            </div>
           </button>
+
           <button
             onClick={() => router.push("/employees")}
-            className="group bg-linear-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all"
+            className="group relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-violet-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
           >
-            <Users className="w-8 h-8 mb-3 group-hover:scale-110 transition-transform" />
-            <h3 className="font-bold text-lg">View Employees</h3>
-            <p className="text-purple-100 text-sm mt-1">Manage team members</p>
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Users className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
+            </div>
+            <div className="relative z-10">
+              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="font-extrabold text-2xl tracking-tight">View Employees</h3>
+              <p className="text-purple-100 text-sm mt-2 font-medium">Manage team members</p>
+            </div>
           </button>
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-              <p className="text-xs text-gray-500 mt-1">Latest updates from your organization</p>
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                <Clock className="w-6 h-6 text-indigo-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Recent Activity</h3>
+                <p className="text-sm text-slate-500 mt-1 font-medium">Latest updates from your organization</p>
+              </div>
             </div>
             <button
               onClick={() => router.push("/leave-requests")}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1"
+              className="text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-colors"
             >
               View All <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-slate-100/80">
             {loadingActivities ? (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="px-8 py-16 flex flex-col items-center justify-center gap-4 text-slate-500">
+                <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-indigo-600"></div>
+                <p className="font-bold text-sm uppercase tracking-widest animate-pulse">Loading Activity...</p>
               </div>
             ) : activities.length === 0 ? (
-              <div className="px-6 py-8 text-center text-gray-500">No recent activity</div>
+              <div className="px-8 py-16 text-center text-slate-500 font-medium">No recent activity found.</div>
             ) : (
               activities.map((activity) => (
-                <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group cursor-pointer">
-                  <div className="flex items-start gap-4">
-                    <div className="text-2xl">{activity.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="font-semibold text-gray-900 truncate">{activity.action}</p>
-                        <span className="text-xs text-gray-500 whitespace-nowrap">{formatTime(activity.timestamp)}</span>
+                <div key={activity.id} className="px-8 py-5 hover:bg-indigo-50/40 transition-colors group cursor-pointer">
+                  <div className="flex items-start gap-5">
+                    <div className="text-3xl p-3 bg-slate-50 rounded-2xl group-hover:bg-white group-hover:shadow-sm transition-all">{activity.icon}</div>
+                    <div className="flex-1 min-w-0 py-1">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <p className="font-extrabold text-slate-800 text-base truncate group-hover:text-indigo-700 transition-colors">{activity.action}</p>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap bg-slate-100 px-2.5 py-1 rounded-full">{formatTime(activity.timestamp)}</span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1 truncate">{activity.description}</p>
+                      <p className="text-sm text-slate-600 mt-1.5 truncate font-medium">{activity.description}</p>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-400 shrink-0 transition-colors" />
+                    <div className="flex items-center justify-center h-12">
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 shrink-0 transition-transform group-hover:translate-x-1" />
+                    </div>
                   </div>
                 </div>
               ))
@@ -365,8 +435,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Footer Status */}
-        <div className="text-center text-xs text-gray-500">
-          <p>Dashboard updates every 30 seconds • Last updated: {new Date().toLocaleTimeString()}</p>
+        <div className="text-center text-sm font-medium text-slate-400 py-4 flex items-center justify-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          Dashboard syncs automatically • Last updated: {new Date().toLocaleTimeString()}
         </div>
       </div>
     </HRMSSidebar>
