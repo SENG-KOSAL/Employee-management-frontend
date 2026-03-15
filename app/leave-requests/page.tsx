@@ -37,7 +37,7 @@ const statusBadge = (status: string) => {
   
   if (lower === "approved") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-200/80">
+      <span className="ui-status-live inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-200/80">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Approved
       </span>
     );
@@ -45,14 +45,14 @@ const statusBadge = (status: string) => {
   
   if (lower === "rejected") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200/80">
+      <span className="ui-status-live inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200/80">
         <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Rejected
       </span>
     );
   }
   
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+    <span className="ui-status-live inline-flex items-center gap-1.5 px-2.5 py-1 shadow-inner rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending
     </span>
   );
@@ -225,7 +225,7 @@ export default function LeaveRequestsPage() {
             <button
               onClick={fetchRows}
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md transition-all duration-200 font-semibold text-sm disabled:opacity-70"
+              className="ui-btn inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:shadow-md transition-all duration-200 font-semibold text-sm disabled:opacity-70"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-500" : ""}`} /> <span className="hidden sm:inline">Refresh</span>
             </button>
@@ -238,7 +238,7 @@ export default function LeaveRequestsPage() {
             </Link> */}
             <button
               onClick={() => router.push("/leave-requests/create")}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+              className="ui-btn inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
             >
               <Plus className="w-4 h-4" /> New Request
             </button>
@@ -258,7 +258,7 @@ export default function LeaveRequestsPage() {
           </div>
         )}
 
-        <div className="bg-slate-50/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-slate-100 p-5">
+        <div className="ui-card bg-slate-50/50 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-slate-100 p-5">
           <div className="flex items-center justify-between mb-4">
              <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500 bg-slate-200/50 px-2.5 py-1 rounded-md">Filters</span>
@@ -333,7 +333,7 @@ export default function LeaveRequestsPage() {
                 <button
                    onClick={() => handleBulkAction("reject")}
                    disabled={bulkActioning !== null}
-                   className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 text-sm font-bold rounded-xl hover:bg-red-50 hover:border-red-300 disabled:opacity-50 transition-all shadow-sm hover:shadow"
+                   className="ui-btn inline-flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 text-sm font-bold rounded-xl hover:bg-red-50 hover:border-red-300 disabled:opacity-50 transition-all shadow-sm hover:shadow"
                 >
                    {bulkActioning === "reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} 
                    {bulkActioning === "reject" ? "Rejecting..." : "Reject All"}
@@ -350,14 +350,14 @@ export default function LeaveRequestsPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+        <div className="ui-card bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
           <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-white">
             <h3 className="font-bold text-gray-900 text-lg">Leave Requests Data</h3>
             <div className="text-xs text-slate-500 font-bold tracking-wide uppercase bg-slate-100 px-3 py-1 rounded-md">Latest 50 records</div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
                 <tr>
                   <th className="px-4 py-4 w-12 text-center">
                      <input
@@ -409,7 +409,7 @@ export default function LeaveRequestsPage() {
                     const empInitials = `${empFirstChars}${empLastChars}`.toUpperCase();
 
                     return (
-                    <tr key={r.id} className={`group hover:bg-blue-50/40 transition-colors duration-150 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${selectedIds.includes(r.id) ? "!bg-indigo-50/60" : ""}`}>
+                    <tr key={r.id} className={`group ui-row-hover hover:bg-blue-50/40 transition-colors duration-150 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${selectedIds.includes(r.id) ? "ui-row-selected" : ""}`}>
                       <td className="px-4 py-4 text-center border-r border-transparent group-hover:border-blue-100/50 transition-colors">
                          {isPending ? (
                            <input

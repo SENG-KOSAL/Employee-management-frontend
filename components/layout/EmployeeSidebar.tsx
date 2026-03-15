@@ -50,7 +50,7 @@ function CollapseToggle() {
   return (
     <button
       onClick={toggleSidebar}
-      className="flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-700"
+      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700"
       aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
     >
       {state === "expanded" ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
@@ -126,7 +126,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon" className="border-r border-gray-200 bg-white">
+      <Sidebar collapsible="icon" className="border-r border-slate-200 bg-white">
         <SidebarHeader className="border-b border-gray-100 px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm shadow-sm">HR</div>
@@ -161,7 +161,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-gray-100 p-3">
+        <SidebarFooter className="border-t border-slate-200 p-3">
           <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
             <span className="text-xs text-gray-400 group-data-[collapsible=icon]:hidden">Press ⌘B to toggle</span>
             <CollapseToggle />
@@ -170,7 +170,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-gray-200 bg-white px-6">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-slate-200 bg-white/95 px-6 backdrop-blur">
           <SidebarTrigger className="md:hidden" />
           <div className="flex-1">
             <h1 className="text-lg font-semibold text-gray-900">Employee Portal</h1>
@@ -182,7 +182,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
                 <span className="text-sm font-medium text-gray-700 hidden sm:inline">{displayName || "Account"}</span>
               </div>
 
-              <div className="absolute right-0 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white shadow-xl opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-150">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-900 truncate">{displayName || "Account"}</p>
                 </div>
@@ -198,7 +198,7 @@ export function EmployeeSidebar({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto bg-gray-50 p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-slate-50/70 p-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

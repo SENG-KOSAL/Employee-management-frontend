@@ -120,13 +120,13 @@ export default function PayslipsPage() {
           </div>
           <button
             onClick={fetchPayslips}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+            className="ui-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div className="ui-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="flex items-center gap-2">
               <input
@@ -162,14 +162,14 @@ export default function PayslipsPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="ui-card bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div className="text-sm text-gray-600">Payslip history</div>
             <div className="text-xs text-gray-500">Latest 50 records</div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Month</th>
                   <th className="px-4 py-3">Status</th>
@@ -181,17 +181,33 @@ export default function PayslipsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="ui-skeleton h-9 w-full rounded-lg" />
+                      </td>
+                    </tr>
+                  ))
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No payslips found</td></tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} className="hover:bg-gray-50">
+                    <tr key={row.id} className="ui-row-hover hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-gray-900">{formatMonthLabel(row.period_start)}</div>
                         <div className="text-xs text-gray-500">#{row.id}</div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-700 capitalize">{row.status || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-gray-700 capitalize">
+                        <span className={`ui-status-live inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold ${
+                          String(row.status || "").toLowerCase() === "paid"
+                            ? "border-green-100 bg-green-50 text-green-700"
+                            : String(row.status || "").toLowerCase() === "approved"
+                              ? "border-blue-100 bg-blue-50 text-blue-700"
+                              : "border-amber-100 bg-amber-50 text-amber-700"
+                        }`}>
+                          {row.status || "-"}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-semibold text-gray-900">{currency(row.net_pay)}</td>
                       <td className="px-4 py-3 text-gray-700">{currency(row.gross_pay)}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{row.created_at ? new Date(row.created_at).toLocaleDateString() : "-"}</td>
@@ -199,13 +215,13 @@ export default function PayslipsPage() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => openPayslip(row)}
-                            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+                            className="ui-btn px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
                           >
                             <Eye className="w-4 h-4" /> View
                           </button>
                           <button
                             onClick={() => downloadPayslip(row)}
-                            className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow inline-flex items-center gap-1"
+                            className="ui-btn px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow inline-flex items-center gap-1"
                           >
                             <Download className="w-4 h-4" /> PDF
                           </button>

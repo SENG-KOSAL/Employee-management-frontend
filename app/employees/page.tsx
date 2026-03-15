@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
@@ -61,6 +61,7 @@ export default function EmployeesPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState("");
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const getApiErrorMessage = (err: unknown, fallback: string) => {
     const msg =
@@ -277,6 +278,14 @@ export default function EmployeesPage() {
     currentPage * perPage
   );
 
+  useEffect(() => {
+    if (!showImportModal) return;
+    const timer = window.setTimeout(() => {
+      importFileInputRef.current?.focus();
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [showImportModal]);
+
   return (
     <HRMSSidebar>
       <div className="space-y-8 max-w-7xl mx-auto">
@@ -289,7 +298,7 @@ export default function EmployeesPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/employees/create"
-              className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+              className="ui-btn inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
             >
               <Plus className="w-4 h-4" />
               Add Employee
@@ -298,7 +307,7 @@ export default function EmployeesPage() {
               type="button"
               onClick={handleDownloadTemplate}
               disabled={downloadingTemplate}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              className="ui-btn inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Download className="w-4 h-4" />
               {downloadingTemplate ? "Downloading..." : "Download Template"}
@@ -315,7 +324,7 @@ export default function EmployeesPage() {
                 setShowImportModal(true);
                 setImportError("");
               }}
-              className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+              className="ui-btn inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
             >
               <Upload className="w-4 h-4" />
               Import Employees
@@ -324,7 +333,7 @@ export default function EmployeesPage() {
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="ui-card bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full sm:max-w-4xl">
             <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -420,7 +429,7 @@ export default function EmployeesPage() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="ui-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -434,7 +443,7 @@ export default function EmployeesPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {paginatedEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-gray-50/80 transition-colors group">
+                      <tr key={emp.id} className="ui-row-hover hover:bg-gray-50/80 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {(() => {
@@ -497,14 +506,14 @@ export default function EmployeesPage() {
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Link
                               href={`/employees/${emp.id}/edit`}
-                              className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
+                              className="ui-icon-btn p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
                               title="Edit Employee"
                             >
                               <Edit2 className="w-4 h-4" />
                             </Link>
                             <button
                               onClick={() => handleDeleteEmployee(emp.id)}
-                              className="p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-100"
+                              className="ui-icon-btn p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-100"
                               title="Delete Employee"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -527,7 +536,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                      className="ui-btn flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Previous
@@ -535,7 +544,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                      className="ui-btn flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       Next
                       <ChevronRight className="w-4 h-4" />
@@ -549,9 +558,9 @@ export default function EmployeesPage() {
       </div>
 
       {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowImportModal(false)} />
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+          <div className="ui-modal-panel relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Import Employees</h3>
@@ -571,6 +580,7 @@ export default function EmployeesPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Excel file</label>
                 <input
+                  ref={importFileInputRef}
                   type="file"
                   accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={(e) => {
@@ -593,7 +603,7 @@ export default function EmployeesPage() {
                 <button
                   type="submit"
                   disabled={importing}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="ui-btn inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Upload className="w-4 h-4" />
                   {importing ? "Importing..." : "Import"}
@@ -601,7 +611,7 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={() => setShowImportModal(false)}
-                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm hover:bg-gray-50"
+                  className="ui-btn px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm hover:bg-gray-50"
                 >
                   Close
                 </button>
