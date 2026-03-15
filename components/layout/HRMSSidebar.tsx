@@ -418,7 +418,7 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon" className="border-r border-gray-200 bg-white">
+      <Sidebar collapsible="icon" className="border-r border-slate-200 bg-white">
         {/* Header with Logo */}
         <SidebarHeader className="border-b border-gray-100 px-4 py-4">
           <div className="flex items-center gap-3">
@@ -448,27 +448,25 @@ export function HRMSSidebar({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <SidebarInset>
-        {/* Top Header Bar - Modernized */}
-        <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b border-gray-200 bg-gradient-to-r from-white via-blue-50 to-white/80 backdrop-blur-md px-8 shadow-sm">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md px-6 shadow-sm">
           <div className="flex items-center gap-4">
             <SidebarTrigger className="md:hidden mr-2" />
             <div className="flex flex-col">
-              <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight leading-tight">{companyName}</h1>
-              <span className="text-sm text-gray-500 font-medium">{isSupportMode ? "Support Mode" : "Management System"}</span>
+              <h1 className="text-lg font-semibold text-slate-900 tracking-tight leading-tight">{companyName}</h1>
+              <span className="text-xs text-slate-500 font-medium">{isSupportMode ? "Support Mode" : "Management System"}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-6">
             {isSuperAdmin ? <TenantSwitcher /> : null}
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-semibold text-gray-600">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
-              <span className="text-xs text-gray-400 mt-1">{new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="text-xs font-semibold text-slate-600">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              <span className="text-xs text-slate-400 mt-1">{new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-white to-gray-100 p-8 rounded-xl shadow-inner">{children}</main>
+        <main className="flex-1 overflow-auto bg-slate-50/70 p-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   )

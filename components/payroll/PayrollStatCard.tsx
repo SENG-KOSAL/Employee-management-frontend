@@ -78,7 +78,7 @@ export default function PayrollStatCard({
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+        "ui-card relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
         isInverted ? "border-slate-800 bg-slate-900 text-white" : "border-gray-100 bg-white",
       ].join(" ")}
     >

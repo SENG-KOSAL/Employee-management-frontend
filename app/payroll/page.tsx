@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { RefreshCw, Search, CheckCircle, DollarSign, Eye } from "lucide-react";
+import { RefreshCw, Search, CheckCircle, DollarSign, Eye, FileText, Clock3, BadgeCheck } from "lucide-react";
 
 interface PayrollRun {
   id: number;
@@ -150,6 +150,18 @@ export default function PayrollPage() {
     });
   }, [runs, search]);
 
+  const payrollStats = useMemo(() => {
+    const draft = filteredRuns.filter((r) => r.status === "draft").length;
+    const approved = filteredRuns.filter((r) => r.status === "approved").length;
+    const paid = filteredRuns.filter((r) => r.status === "paid").length;
+    return {
+      total: filteredRuns.length,
+      draft,
+      approved,
+      paid,
+    };
+  }, [filteredRuns]);
+
   const handleExport = () => {
     if (!filteredRuns.length) {
       setError("No payroll runs to export");
@@ -221,33 +233,64 @@ export default function PayrollPage() {
           <div className="flex gap-2">
             <button
               onClick={handleExport}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+              className="ui-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
               Export CSV
             </button>
             <button
               onClick={handleImportClick}
               disabled={importing}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm disabled:opacity-60"
+              className="ui-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm disabled:opacity-60"
             >
               {importing ? "Importing..." : "Import"}
             </button>
             <button
               onClick={() => fetchRuns()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+              className="ui-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
             <button
               onClick={() => router.push("/payroll/create")}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
+              className="ui-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
             >
               Create / Generate Payroll
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sticky top-16 z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="ui-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Runs</p>
+              <FileText className="w-4 h-4 text-indigo-500" />
+            </div>
+            <p className="ui-kpi-value mt-2 text-2xl font-bold text-slate-900">{payrollStats.total}</p>
+          </div>
+          <div className="ui-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Draft</p>
+              <Clock3 className="w-4 h-4 text-amber-500" />
+            </div>
+            <p className="ui-kpi-value mt-2 text-2xl font-bold text-amber-700">{payrollStats.draft}</p>
+          </div>
+          <div className="ui-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Approved</p>
+              <CheckCircle className="w-4 h-4 text-blue-500" />
+            </div>
+            <p className="ui-kpi-value mt-2 text-2xl font-bold text-blue-700">{payrollStats.approved}</p>
+          </div>
+          <div className="ui-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paid</p>
+              <BadgeCheck className="w-4 h-4 text-emerald-500" />
+            </div>
+            <p className="ui-kpi-value mt-2 text-2xl font-bold text-emerald-700">{payrollStats.paid}</p>
+          </div>
+        </div>
+
+        <div className="ui-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sticky top-16 z-10">
           <input
             ref={fileInputRef}
             type="file"
@@ -294,13 +337,13 @@ export default function PayrollPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
-                className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                className="ui-btn px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
               >
                 Reset
               </button>
               <button
                 onClick={() => fetchRuns()}
-                className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
+                className="ui-btn px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
               >
                 Apply
               </button>
@@ -308,14 +351,14 @@ export default function PayrollPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="ui-card bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <div className="text-sm text-gray-600">Payroll Runs</div>
             <div className="text-xs text-gray-500">Approve then mark paid to finalize.</div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Period</th>
                   <th className="px-4 py-3">Status</th>
@@ -327,7 +370,13 @@ export default function PayrollPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+                  Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-4" colSpan={6}>
+                        <div className="ui-skeleton h-8 w-full rounded-lg" />
+                      </td>
+                    </tr>
+                  ))
                 ) : filteredRuns.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No runs found</td></tr>
                 ) : (
@@ -335,7 +384,7 @@ export default function PayrollPage() {
                     const isApproveLoading = actionId === run.id && actionType === "approve";
                     const isPayLoading = actionId === run.id && actionType === "pay";
                     return (
-                      <tr key={run.id} className="hover:bg-gray-50">
+                      <tr key={run.id} className="ui-row-hover hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <div className="font-semibold text-gray-900">{formatMonthLabel(run.period_start)}</div>
                           <div className="text-xs text-gray-500">#{run.id}</div>
@@ -352,7 +401,7 @@ export default function PayrollPage() {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => router.push(`/payroll/${run.id}`)}
-                              className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+                              className="ui-btn px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
                             >
                               <Eye className="w-4 h-4" /> View
                             </button>
@@ -360,7 +409,7 @@ export default function PayrollPage() {
                               <button
                                 onClick={() => approveRun(run.id)}
                                 disabled={isApproveLoading}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
+                                className="ui-btn px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
                               >
                                 <CheckCircle className="w-4 h-4" /> {isApproveLoading ? "Approving..." : "Approve"}
                               </button>
@@ -369,7 +418,7 @@ export default function PayrollPage() {
                               <button
                                 onClick={() => payRun(run.id)}
                                 disabled={isPayLoading}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
+                                className="ui-btn px-3 py-1.5 text-xs rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow disabled:opacity-60 inline-flex items-center gap-1"
                               >
                                 <DollarSign className="w-4 h-4" /> {isPayLoading ? "Paying..." : "Mark Paid"}
                               </button>

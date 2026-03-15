@@ -84,24 +84,24 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
 
   return (
     <div
-      className={`bg-white border border-gray-200 rounded-2xl shadow-sm p-8 print:p-6 print:shadow-none print:border-0 print:w-full ${
+      className={`bg-white border border-slate-200 rounded-2xl shadow-sm p-8 print:p-6 print:shadow-none print:border-0 print:w-full ${
         idx < totalCount - 1 ? "page-break" : ""
       }`}
     >
-      <div className="flex flex-col gap-6 border-b border-gray-200 pb-6">
+      <div className="flex flex-col gap-6 border-b border-slate-200 pb-6">
         <div className="flex items-start justify-between gap-6">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-lg font-bold text-white shadow-sm">
               {companyInitials}
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-blue-700 font-semibold">{companyLabel}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-indigo-700 font-semibold">{companyLabel}</p>
               <h2 className="text-2xl font-bold text-gray-900">Payslip</h2>
               <p className="mt-1 text-sm text-gray-500">Compensation statement for the selected payroll period.</p>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
                 <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">Employee: {p.employee?.employee_code || "-"}</span>
                 <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">Payroll Run: {payrollRunId || "-"}</span>
-                <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">Status: {payType}</span>
+                <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-indigo-700">Status: {payType}</span>
               </div>
             </div>
           </div>
@@ -131,7 +131,7 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-5">
           <div>
             <p className="text-xs uppercase text-gray-500 font-semibold">Employee Information</p>
             <p className="text-lg font-bold text-gray-900 mt-1">{name || "-"}</p>
@@ -171,7 +171,7 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
             <p className="mt-1 text-2xl font-bold text-rose-900">{currency(totalDeductions)}</p>
             <p className="mt-1 text-xs text-rose-800">Includes unpaid leave and manual deduction adjustments.</p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-white">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-white shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Net Pay</p>
             <p className="mt-1 text-2xl font-bold">{currency(p.net_pay)}</p>
             <p className="mt-1 text-xs text-slate-300">Final amount payable for this payroll cycle.</p>
@@ -214,12 +214,12 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
                 <td className="px-4 py-2 text-right font-semibold text-gray-900">{currency(p.benefits_total)}</td>
                 <td className="px-4 py-2 text-right text-gray-700">{currency(p.benefits_total)}</td>
               </tr>
-              <tr className="bg-gray-50 font-semibold text-gray-900">
+              <tr className="bg-slate-50 font-semibold text-gray-900">
                 <td className="px-4 py-2">Gross Pay</td>
                 <td className="px-4 py-2 text-center text-gray-600">-</td>
                 <td className="px-4 py-2 text-center text-gray-600">-</td>
-                <td className="px-4 py-2 text-right">{currency(p.gross_pay)}</td>
-                <td className="px-4 py-2 text-right">{currency(p.gross_pay)}</td>
+                <td className="px-4 py-2 text-right text-base font-bold">{currency(p.gross_pay)}</td>
+                <td className="px-4 py-2 text-right text-base font-bold">{currency(p.gross_pay)}</td>
               </tr>
             </tbody>
           </table>
@@ -246,12 +246,12 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
                 <td className="px-4 py-2 text-right font-semibold text-gray-900">{currency(p.unpaid_leave_deduction)}</td>
                 <td className="px-4 py-2 text-right text-gray-700">{currency(p.unpaid_leave_deduction)}</td>
               </tr>
-              <tr className="bg-gray-50 font-semibold text-gray-900">
+              <tr className="bg-slate-50 font-semibold text-gray-900">
                 <td className="px-4 py-2">Total Deductions</td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right text-base font-bold">
                   {currency(Number(p.deductions_total || 0) + Number(p.unpaid_leave_deduction || 0))}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right text-base font-bold">
                   {currency(Number(p.deductions_total || 0) + Number(p.unpaid_leave_deduction || 0))}
                 </td>
               </tr>
@@ -330,9 +330,9 @@ export const PayslipDocument: React.FC<PayslipDocumentProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
           <div className="col-span-1 md:col-span-2" />
-          <div className="p-4 rounded-xl bg-gray-900 text-white shadow-sm">
+          <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-md">
             <p className="text-xs uppercase tracking-wide">Net Pay</p>
-            <p className="text-3xl font-bold mt-1">{currency(p.net_pay)}</p>
+            <p className="text-3xl font-extrabold mt-1 tracking-tight">{currency(p.net_pay)}</p>
             <p className="text-xs text-gray-200 mt-1">Total gross minus deductions</p>
           </div>
         </div>
