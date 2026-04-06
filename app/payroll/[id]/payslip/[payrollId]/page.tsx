@@ -231,16 +231,37 @@ export default function PayslipPage() {
         {loading || !data ? (
           <div className="p-12 bg-white border border-slate-200 rounded-xl text-center text-slate-500 shadow-sm">Loading financial data...</div>
         ) : (
-          <PayslipDocument
-            data={data}
-            companyName={company.name}
-            adjustments={adjustments}
-            adjustmentsLoading={adjustmentsLoading}
-            adjustmentsError={adjustmentsError}
-            canAdjust={canAdjust}
-            onAddAdjustment={openAdjustmentModal}
-            payrollRunId={runId as string}
-          />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 print:hidden">
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                <p className="text-xs uppercase font-semibold text-indigo-700">Company Name</p>
+                <p className="text-base font-bold text-indigo-900 mt-1">{company.name || "Company Name"}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase font-semibold text-slate-500">Employee</p>
+                <p className="text-base font-bold text-slate-900 mt-1">
+                  {data.employee?.full_name || `${data.employee?.first_name || ""} ${data.employee?.last_name || ""}`.trim() || "Employee"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Code: {data.employee?.employee_code || "-"}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase font-semibold text-slate-500">Payslip Period</p>
+                <p className="text-base font-bold text-slate-900 mt-1">{data.period_start} → {data.period_end}</p>
+                <p className="text-xs text-slate-500 mt-1">Status: {data.status || "-"}</p>
+              </div>
+            </div>
+
+            <PayslipDocument
+              data={data}
+              companyName={company.name}
+              adjustments={adjustments}
+              adjustmentsLoading={adjustmentsLoading}
+              adjustmentsError={adjustmentsError}
+              canAdjust={canAdjust}
+              onAddAdjustment={openAdjustmentModal}
+              payrollRunId={runId as string}
+            />
+          </div>
         )}
       </div>
 
