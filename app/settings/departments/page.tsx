@@ -52,7 +52,7 @@ export default function DepartmentsPage() {
   return (
     <HRMSSidebar>
       <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 p-8 text-white shadow-lg shadow-indigo-500/20 sm:p-10">
+        {/* <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 p-8 text-white shadow-lg shadow-indigo-500/20 sm:p-10">
           <div className="relative z-10">
             <Link href="/settings" className="mb-6 inline-flex items-center text-indigo-100 transition-colors hover:text-white text-sm font-semibold tracking-wide">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -73,7 +73,7 @@ export default function DepartmentsPage() {
             </p>
           </div>
           <div className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-        </div>
+        </div> */}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

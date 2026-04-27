@@ -117,6 +117,7 @@ const navigation = {
       items: [
         { title: "Dashboard", href: "/employees/dashboard" },
         { title: "Employees", href: "/employees" },
+        { title: "📊 Report", href: "/employees/reports" },
         // { title: "Departments", href: "/departments" },
         // { title: "Positions / Roles", href: "/positions" },
       ],
@@ -130,6 +131,7 @@ const navigation = {
         { title: "Leave Requests", href: "/leave-requests" },
         // { title: "Holidays", href: "/holidays" },
         { title: "Overtime", href: "/request/OverTime" },
+        { title: "📊 Report", href: "/reports/attendance" }
       ],
     },
     {
@@ -140,19 +142,10 @@ const navigation = {
         { title: "Payroll", href: "/payroll" },
         { title: "Payslips", href: "/payslips" },
         { title: "Salary", href: "/salaries" },
+        { title: "📊 Report", href: "/reports/payroll" },
       ],
     },
-    {
-      title: "Reporting",
-      icon: ShieldCheck,
-      items: [
-        { title: "Reports Dashboard", href: "/reports" },
-        { title: "Attendance Report", href: "/reports/attendance" },
-        { title: "Leave Report", href: "/reports/leave" },
-        { title: "Employee Summary", href: "/reports/employees" },
-        { title: "Department Analytics", href: "/reports/departments" },
-      ],
-    },
+    // Reporting module hidden (moved under Employee Management -> 📊 Report)
     // {
     //   title: "Recruitment",
     //   icon: Megaphone,

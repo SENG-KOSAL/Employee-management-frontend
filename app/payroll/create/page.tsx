@@ -6,6 +6,7 @@ import { Search, Users, X } from "lucide-react";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { departmentsService } from "@/services/departments";
+import { payrollPeriodsService, type PayrollPeriod } from "@/services/payrollPeriods";
 import type { Department } from "@/types/hr";
 import { getToken } from "@/utils/auth";
 
@@ -25,6 +26,7 @@ type PayrollCreatePayload = {
   year: number;
   period_start: string;
   period_end: string;
+  payment_date?: string;
   employee_ids: number[];
   notes?: string;
 };
@@ -61,21 +63,38 @@ const currency = (value?: number | string | null) => {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number.isFinite(amount) ? amount : 0);
 };
 
-const getMonthRange = (value: string) => {
+const formatDateValue = (date: Date) => date.toISOString().slice(0, 10);
+
+const getDefaultPeriodDates = () => {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+
+  const startDate = new Date(Date.UTC(year, month, 1));
+  const endDate = new Date(Date.UTC(year, month + 1, 0));
+
+  return {
+    periodStart: formatDateValue(startDate),
+    periodEnd: formatDateValue(endDate),
+    paymentDate: formatDateValue(endDate),
+  };
+};
+
+const getMonthRangeFromValue = (value: string) => {
   const [yearStr, monthStr] = value.split("-");
   const year = Number(yearStr);
   const monthIndex = Number(monthStr) - 1;
 
+  if (Number.isNaN(year) || Number.isNaN(monthIndex)) {
+    return null;
+  }
+
   const startDate = new Date(Date.UTC(year, monthIndex, 1));
   const endDate = new Date(Date.UTC(year, monthIndex + 1, 0));
 
-  const formatDate = (date: Date) => date.toISOString().slice(0, 10);
-
   return {
-    year,
-    month: monthIndex + 1,
-    periodStart: formatDate(startDate),
-    periodEnd: formatDate(endDate),
+    periodStart: formatDateValue(startDate),
+    periodEnd: formatDateValue(endDate),
   };
 };
 
@@ -119,6 +138,9 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 export default function PayrollCreatePage() {
   const router = useRouter();
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [periodStart, setPeriodStart] = useState(() => getDefaultPeriodDates().periodStart);
+  const [periodEnd, setPeriodEnd] = useState(() => getDefaultPeriodDates().periodEnd);
+  const [paymentDate, setPaymentDate] = useState(() => getDefaultPeriodDates().paymentDate);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [employeesLoading, setEmployeesLoading] = useState(true);
@@ -132,6 +154,10 @@ export default function PayrollCreatePage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [payrollPeriods, setPayrollPeriods] = useState<PayrollPeriod[]>([]);
+  const [selectedPayrollPeriodId, setSelectedPayrollPeriodId] = useState<string>("");
+  const [payrollPeriodsLoading, setPayrollPeriodsLoading] = useState(false);
+  const [payrollPeriodsError, setPayrollPeriodsError] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   useEffect(() => {
@@ -143,8 +169,23 @@ export default function PayrollCreatePage() {
 
     void fetchEmployees();
     void fetchDepartments();
+    void fetchPayrollPeriods();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchPayrollPeriods = async () => {
+    try {
+      setPayrollPeriodsLoading(true);
+      setPayrollPeriodsError("");
+      const { data } = await payrollPeriodsService.list();
+      const sorted = [...data].sort((a, b) => a.start_date.localeCompare(b.start_date));
+      setPayrollPeriods(sorted);
+    } catch (err: unknown) {
+      setPayrollPeriodsError(getApiErrorMessage(err, "Failed to load payroll periods."));
+    } finally {
+      setPayrollPeriodsLoading(false);
+    }
+  };
 
   const fetchDepartments = async () => {
     try {
@@ -224,6 +265,35 @@ export default function PayrollCreatePage() {
     setSelectedEmployeeIds((current) => current.filter((id) => !visibleIds.has(id)));
   };
 
+  const handleMonthChange = (value: string) => {
+    setMonth(value);
+    setSelectedPayrollPeriodId("");
+    const range = getMonthRangeFromValue(value);
+    if (!range) return;
+
+    setPeriodStart(range.periodStart);
+    setPeriodEnd(range.periodEnd);
+    setPaymentDate(range.periodEnd);
+  };
+
+  const handleSelectPayrollPeriod = (periodId: string) => {
+    setSelectedPayrollPeriodId(periodId);
+    if (!periodId) return;
+
+    const selected = payrollPeriods.find((period) => String(period.id) === periodId);
+    if (!selected) return;
+
+    setPeriodStart(selected.start_date);
+    setPeriodEnd(selected.end_date);
+    setPaymentDate(selected.payment_date);
+
+    const start = new Date(selected.start_date);
+    if (!Number.isNaN(start.getTime())) {
+      const monthValue = `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`;
+      setMonth(monthValue);
+    }
+  };
+
   const handleGeneratePayroll = async () => {
     setError("");
     setSuccess("");
@@ -239,12 +309,15 @@ export default function PayrollCreatePage() {
     }
     try {
       setLoading(true);
-      const { year, month: monthNumber, periodStart, periodEnd } = getMonthRange(month);
+      const startDate = new Date(periodStart);
+      const monthNumber = startDate.getUTCMonth() + 1;
+      const year = startDate.getUTCFullYear();
       const payload: PayrollCreatePayload = {
         month: monthNumber,
         year,
         period_start: periodStart,
         period_end: periodEnd,
+        payment_date: paymentDate,
         employee_ids: [...selectedEmployeeIds].sort((left, right) => left - right),
       };
       if (notes.trim()) payload.notes = notes.trim();
@@ -270,6 +343,30 @@ export default function PayrollCreatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!periodStart || !periodEnd || !paymentDate) {
+      setError("Please select start date, end date, and payment date.");
+      return;
+    }
+
+    const start = new Date(periodStart);
+    const end = new Date(periodEnd);
+    const payment = new Date(paymentDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || Number.isNaN(payment.getTime())) {
+      setError("Invalid dates. Please review payroll dates.");
+      return;
+    }
+
+    if (end <= start) {
+      setError("End date must be after start date.");
+      return;
+    }
+
+    if (payment < end) {
+      setError("Payment date must be after or equal to end date.");
+      return;
+    }
 
     if (selectedEmployeeIds.length === 0) {
       setError("Select at least one employee before generating payroll.");
@@ -325,22 +422,47 @@ export default function PayrollCreatePage() {
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-6">
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Month</label>
                     <input
                       type="month"
                       value={month}
-                      onChange={(e) => setMonth(e.target.value)}
+                      onChange={(e) => handleMonthChange(e.target.value)}
                       required
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Payroll Period</label>
-                    <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-gray-50">
-                      {getMonthRange(month).periodStart} to {getMonthRange(month).periodEnd}
-                    </div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={periodStart}
+                      onChange={(e) => setPeriodStart(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={periodEnd}
+                      onChange={(e) => setPeriodEnd(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Payment Date</label>
+                    <input
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
                 </div>
                 <div>
@@ -574,7 +696,11 @@ export default function PayrollCreatePage() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                  Payroll period: <span className="font-medium text-gray-900">{getMonthLabel(month)}</span>
+                  Month: <span className="font-medium text-gray-900">{getMonthLabel(month)}</span>
+                  <span className="mx-1">•</span>
+                  Payroll period: <span className="font-medium text-gray-900">{periodStart} to {periodEnd}</span>
+                  <span className="mx-1">•</span>
+                  Payment date: <span className="font-medium text-gray-900">{paymentDate}</span>
                 </div>
                 <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                   Targeting filters now reflect department, role, and employment status so you can review exactly who will be included before generation.
@@ -607,7 +733,7 @@ export default function PayrollCreatePage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Confirm payroll generation</h2>
               <p className="mt-2 text-sm text-gray-600">
-                Generate payroll for {includedCount} employee{includedCount === 1 ? "" : "s"} for {getMonthLabel(month)}?
+                Generate payroll for {includedCount} employee{includedCount === 1 ? "" : "s"} for {getMonthLabel(month)} from {periodStart} to {periodEnd} (payment: {paymentDate})?
               </p>
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
