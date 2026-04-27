@@ -5,7 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User, Download, Printer } from "lucide-react";
+import { RefreshCw, CheckCircle, DollarSign, ArrowLeft, AlertTriangle, User, Download, Printer, ChevronLeft, ChevronRight } from "lucide-react";
+
+type UserPayload = {
+  role?: string | null;
+};
+
+type AdjustmentKind = "earning" | "deduction";
 
 interface PayrollItem {
   id: number;
@@ -35,9 +41,11 @@ interface PayrollItem {
 
 interface Adjustment {
   id: number;
+  kind?: AdjustmentKind;
   amount: number | string;
   note?: string | null;
-  created_at?: string;
+  description?: string | null;
+  created_at?: string | null;
 }
 
 interface AuditLog {
@@ -77,17 +85,49 @@ const statusBadge = (status: string) => {
   }
 };
 
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "message" in error.response.data &&
+    typeof error.response.data.message === "string" &&
+    error.response.data.message.trim()
+  ) {
+    return error.response.data.message;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
+const capitalize = (value?: string | null) => {
+  if (!value) return "-";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
 export default function PayrollRunDetailPage() {
   const router = useRouter();
   const params = useParams();
   const runId = params?.id as string;
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserPayload | null>(null);
   const [data, setData] = useState<PayrollRunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [actionType, setActionType] = useState<"approve" | "pay" | null>(null);
   const [search, setSearch] = useState("");
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [editPayrollId, setEditPayrollId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     base_pay: "",
@@ -98,9 +138,17 @@ export default function PayrollRunDetailPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [adjustPayrollId, setAdjustPayrollId] = useState<number | null>(null);
-  const [adjustForm, setAdjustForm] = useState({ amount: "", note: "" });
+  const [adjustForm, setAdjustForm] = useState<{ kind: AdjustmentKind; amount: string; description: string }>({
+    kind: "earning",
+    amount: "",
+    description: "",
+  });
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [adjustments, setAdjustments] = useState<Record<number, Adjustment[]>>({});
+  const [adjustmentsLoading, setAdjustmentsLoading] = useState<Record<number, boolean>>({});
+  const [adjustmentErrors, setAdjustmentErrors] = useState<Record<number, string>>({});
+
+  const adjustmentsAllowed = data?.status === "approved" || data?.status === "paid";
 
   const issueFlags = (p: PayrollItem) => {
     const flags: string[] = [];
@@ -128,6 +176,16 @@ export default function PayrollRunDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, runId]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, showIssuesOnly, pageSize]);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => setSuccess(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [success]);
+
   const fetchUser = async () => {
     try {
       const res = await api.get("/api/v1/me");
@@ -139,7 +197,7 @@ export default function PayrollRunDetailPage() {
         return;
       }
       setUser(data);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
       router.push("/auth/login");
     }
@@ -152,9 +210,9 @@ export default function PayrollRunDetailPage() {
       const res = await api.get(`/api/v1/payroll-runs/${runId}`);
       const detail = res.data?.data ?? res.data;
       setData(detail);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      setError("Failed to load payroll run");
+      setError(getApiErrorMessage(err, "Failed to load payroll run"));
     } finally {
       setLoading(false);
     }
@@ -166,9 +224,10 @@ export default function PayrollRunDetailPage() {
       setActionType("approve");
       await api.post(`/api/v1/payroll-runs/${runId}/approve`);
       fetchDetail();
-    } catch (err) {
+      setSuccess("Payroll run approved successfully.");
+    } catch (err: unknown) {
       console.error(err);
-      setError("Failed to approve run");
+      setError(getApiErrorMessage(err, "Failed to approve run"));
     } finally {
       setActionType(null);
     }
@@ -180,9 +239,10 @@ export default function PayrollRunDetailPage() {
       setActionType("pay");
       await api.post(`/api/v1/payroll-runs/${runId}/mark-paid`);
       fetchDetail();
-    } catch (err) {
+      setSuccess("Payroll run marked as paid.");
+    } catch (err: unknown) {
       console.error(err);
-      setError("Failed to mark run as paid");
+      setError(getApiErrorMessage(err, "Failed to mark run as paid"));
     } finally {
       setActionType(null);
     }
@@ -280,6 +340,20 @@ export default function PayrollRunDetailPage() {
     router.push(`/payroll/${runId}/payslip/print-all?auto=1`);
   };
 
+  const issueSummary = useMemo(() => {
+    const totalIssues = filteredPayrolls.reduce((count, payroll) => count + issueFlags(payroll).length, 0);
+    const impactedEmployees = filteredPayrolls.filter((payroll) => issueFlags(payroll).length > 0).length;
+    return { totalIssues, impactedEmployees };
+  }, [filteredPayrolls]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPayrolls.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedPayrolls = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPayrolls.slice(start, start + pageSize);
+  }, [currentPage, filteredPayrolls, pageSize]);
+
   const startEdit = (p: PayrollItem) => {
     setError("");
     setEditPayrollId(p.id);
@@ -301,10 +375,10 @@ export default function PayrollRunDetailPage() {
       await api.patch(`/api/v1/payrolls/${editPayrollId}`, editForm);
       await fetchDetail();
       setEditPayrollId(null);
-    } catch (err: any) {
+      setSuccess("Payroll line updated.");
+    } catch (err: unknown) {
       console.error(err);
-      const message = err?.response?.data?.message || "Failed to update payroll line";
-      setError(message);
+      setError(getApiErrorMessage(err, "Failed to update payroll line"));
     } finally {
       setSavingEdit(false);
     }
@@ -312,35 +386,58 @@ export default function PayrollRunDetailPage() {
 
   const loadAdjustments = async (payrollId: number) => {
     try {
+      setAdjustmentsLoading((prev) => ({ ...prev, [payrollId]: true }));
+      setAdjustmentErrors((prev) => ({ ...prev, [payrollId]: "" }));
       const res = await api.get(`/api/v1/payrolls/${payrollId}/adjustments`);
       const list = res.data?.data ?? res.data ?? [];
       setAdjustments((prev) => ({ ...prev, [payrollId]: Array.isArray(list) ? list : [] }));
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
+      setAdjustmentErrors((prev) => ({
+        ...prev,
+        [payrollId]: getApiErrorMessage(err, "Failed to load adjustments"),
+      }));
+    } finally {
+      setAdjustmentsLoading((prev) => ({ ...prev, [payrollId]: false }));
     }
   };
 
   const startAdjust = async (p: PayrollItem) => {
     setError("");
+    if (!adjustmentsAllowed) return;
     setAdjustPayrollId(p.id);
     setEditPayrollId(null);
-    setAdjustForm({ amount: "", note: "" });
+    setAdjustForm({ kind: "earning", amount: "", description: "" });
     await loadAdjustments(p.id);
   };
 
   const submitAdjust = async () => {
     if (!adjustPayrollId) return;
+    const parsedAmount = Number(adjustForm.amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setAdjustmentErrors((prev) => ({ ...prev, [adjustPayrollId]: "Amount must be greater than 0." }));
+      return;
+    }
+    if (!adjustForm.description.trim()) {
+      setAdjustmentErrors((prev) => ({ ...prev, [adjustPayrollId]: "Description is required." }));
+      return;
+    }
     try {
       setSavingAdjust(true);
       setError("");
-      await api.post(`/api/v1/payrolls/${adjustPayrollId}/adjustments`, adjustForm);
+      setAdjustmentErrors((prev) => ({ ...prev, [adjustPayrollId]: "" }));
+      await api.post(`/api/v1/payrolls/${adjustPayrollId}/adjustments`, {
+        kind: adjustForm.kind,
+        amount: parsedAmount,
+        description: adjustForm.description.trim(),
+      });
       await loadAdjustments(adjustPayrollId);
       await fetchDetail();
-      setAdjustForm({ amount: "", note: "" });
-    } catch (err: any) {
+      setAdjustForm({ kind: "earning", amount: "", description: "" });
+      setSuccess("Adjustment added successfully.");
+    } catch (err: unknown) {
       console.error(err);
-      const message = err?.response?.data?.message || "Failed to add adjustment";
-      setError(message);
+      setAdjustmentErrors((prev) => ({ ...prev, [adjustPayrollId]: getApiErrorMessage(err, "Failed to add adjustment") }));
     } finally {
       setSavingAdjust(false);
     }
@@ -385,6 +482,9 @@ export default function PayrollRunDetailPage() {
 
         {error && (
           <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">{error}</div>
+        )}
+        {success && (
+          <div className="p-3 rounded-lg border border-green-200 bg-green-50 text-sm text-green-700">{success}</div>
         )}
 
         {loading || !data ? (
@@ -437,7 +537,7 @@ export default function PayrollRunDetailPage() {
                 <button
                   onClick={approveRun}
                   disabled={actionType === "approve"}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60"
                 >
                   <CheckCircle className="w-4 h-4" /> {actionType === "approve" ? "Approving..." : "Approve Run"}
                 </button>
@@ -446,7 +546,7 @@ export default function PayrollRunDetailPage() {
                 <button
                   onClick={markPaid}
                   disabled={actionType === "pay"}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-green-700 shadow-sm hover:shadow disabled:opacity-60"
                 >
                   <DollarSign className="w-4 h-4" /> {actionType === "pay" ? "Marking..." : "Mark as Paid"}
                 </button>
@@ -460,6 +560,9 @@ export default function PayrollRunDetailPage() {
                   <AlertTriangle className="w-4 h-4 text-amber-500" /> Review checklist
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 font-semibold text-amber-700">
+                    {issueSummary.impactedEmployees} rows flagged • {issueSummary.totalIssues} issue{issueSummary.totalIssues === 1 ? "" : "s"}
+                  </span>
                   {Object.entries(statusCounts).map(([s, count]) => (
                     <span key={s} className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-semibold border ${statusBadge(s)}`}>
                       {s}: {count}
@@ -503,6 +606,15 @@ export default function PayrollRunDetailPage() {
                     placeholder="Search by name or code"
                     className="text-sm rounded-lg border border-gray-200 px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <select
+                    value={String(pageSize)}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="text-sm rounded-lg border border-gray-200 px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {[10, 20, 50].map((size) => (
+                      <option key={size} value={size}>{size} / page</option>
+                    ))}
+                  </select>
                   <div className="text-xs text-gray-500">Net pay and breakdown per employee.</div>
                 </div>
               </div>
@@ -525,7 +637,7 @@ export default function PayrollRunDetailPage() {
                     {filteredPayrolls.length === 0 ? (
                       <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No payrolls in this run</td></tr>
                     ) : (
-                      filteredPayrolls.map((p) => (
+                      paginatedPayrolls.map((p) => (
                         <tr key={p.id} className={`hover:bg-gray-50 ${issueFlags(p).length ? "bg-amber-50/40" : ""}`}>
                           <td className="px-4 py-3">
                             <div className="font-semibold text-gray-900">{p.employee?.full_name || `${p.employee?.first_name || ""} ${p.employee?.last_name || ""}`}</div>
@@ -572,20 +684,20 @@ export default function PayrollRunDetailPage() {
                                   Edit
                                 </button>
                               )}
-                              {(data.status === "approved" || data.status === "paid") && (
-                                <button
-                                  onClick={() => startAdjust(p)}
-                                  className="text-xs px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                >
-                                  Adjust
-                                </button>
-                              )}
+                              <button
+                                onClick={() => startAdjust(p)}
+                                disabled={!adjustmentsAllowed}
+                                className={`text-xs px-3 py-1.5 rounded-lg border ${adjustmentsAllowed ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50"}`}
+                                title={adjustmentsAllowed ? "Add manual payroll adjustment" : "Adjustments are available after payroll is approved."}
+                              >
+                                Adjust
+                              </button>
                             </div>
                             {(editPayrollId === p.id || adjustPayrollId === p.id) && (
-                              <div className="mt-3 text-left bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                              <div className="mt-3 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 text-left shadow-inner space-y-3">
                                 {editPayrollId === p.id && (
                                   <div className="space-y-2">
-                                    <div className="text-xs font-semibold text-gray-700">Edit payroll line (draft only)</div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Edit payroll line (draft only)</div>
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                       <label className="flex flex-col gap-1">
                                         <span className="text-xs text-gray-500">Base</span>
@@ -641,7 +753,7 @@ export default function PayrollRunDetailPage() {
                                       <button
                                         onClick={submitEdit}
                                         disabled={savingEdit}
-                                        className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                                        className="px-3 py-1.5 rounded bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-60"
                                       >
                                         {savingEdit ? "Saving..." : "Save changes"}
                                       </button>
@@ -657,32 +769,57 @@ export default function PayrollRunDetailPage() {
 
                                 {adjustPayrollId === p.id && (
                                   <div className="space-y-2">
-                                    <div className="text-xs font-semibold text-gray-700">Add adjustment (approved/paid)</div>
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Add adjustment (approved/paid)</div>
+                                    {!adjustmentsAllowed && (
+                                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        Adjustments are available after payroll is approved.
+                                      </div>
+                                    )}
+                                    <div className="grid grid-cols-3 gap-2 text-sm">
                                       <label className="flex flex-col gap-1">
-                                        <span className="text-xs text-gray-500">Amount (use negative for deductions)</span>
+                                        <span className="text-xs text-gray-500">Type</span>
+                                        <select
+                                          value={adjustForm.kind}
+                                          onChange={(e) => setAdjustForm((prev) => ({ ...prev, kind: e.target.value as AdjustmentKind }))}
+                                          className="rounded border border-gray-200 px-2 py-1 bg-white"
+                                          disabled={!adjustmentsAllowed || savingAdjust}
+                                        >
+                                          <option value="earning">Earning</option>
+                                          <option value="deduction">Deduction</option>
+                                        </select>
+                                      </label>
+                                      <label className="flex flex-col gap-1">
+                                        <span className="text-xs text-gray-500">Amount</span>
                                         <input
                                           value={adjustForm.amount}
                                           onChange={(e) => setAdjustForm((prev) => ({ ...prev, amount: e.target.value }))}
                                           className="rounded border border-gray-200 px-2 py-1"
                                           type="number"
+                                          min="0"
                                           step="0.01"
-                                        />
-                                      </label>
-                                      <label className="flex flex-col gap-1">
-                                        <span className="text-xs text-gray-500">Note</span>
-                                        <input
-                                          value={adjustForm.note}
-                                          onChange={(e) => setAdjustForm((prev) => ({ ...prev, note: e.target.value }))}
-                                          className="rounded border border-gray-200 px-2 py-1"
-                                          type="text"
+                                          disabled={!adjustmentsAllowed || savingAdjust}
                                         />
                                       </label>
                                     </div>
+                                    <label className="flex flex-col gap-1 text-sm">
+                                      <span className="text-xs text-gray-500">Description</span>
+                                      <textarea
+                                        value={adjustForm.description}
+                                        onChange={(e) => setAdjustForm((prev) => ({ ...prev, description: e.target.value }))}
+                                        className="rounded border border-gray-200 px-2 py-1"
+                                        rows={2}
+                                        disabled={!adjustmentsAllowed || savingAdjust}
+                                      />
+                                    </label>
+                                    {adjustmentErrors[p.id] && (
+                                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                        {adjustmentErrors[p.id]}
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-2 text-xs">
                                       <button
                                         onClick={submitAdjust}
-                                        disabled={savingAdjust}
+                                        disabled={savingAdjust || !adjustmentsAllowed}
                                         className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
                                       >
                                         {savingAdjust ? "Saving..." : "Save adjustment"}
@@ -697,14 +834,23 @@ export default function PayrollRunDetailPage() {
                                     <div className="text-xs text-gray-600">Adjustments on approved/paid lines are logged and totals are recalculated.</div>
                                     <div className="text-xs text-gray-800 space-y-1">
                                       <div className="font-semibold text-gray-900">Past adjustments</div>
-                                      {(adjustments[p.id] || []).length === 0 ? (
+                                      {adjustmentsLoading[p.id] ? (
+                                        <p className="text-gray-500">Loading adjustments...</p>
+                                      ) : (adjustments[p.id] || []).length === 0 ? (
                                         <p className="text-gray-500">No adjustments yet.</p>
                                       ) : (
                                         <ul className="space-y-1">
                                           {(adjustments[p.id] || []).map((adj) => (
                                             <li key={adj.id} className="flex items-center justify-between">
-                                              <span>{adj.note || "Adjustment"}</span>
-                                              <span className="font-mono">{currency(adj.amount)}</span>
+                                              <div className="min-w-0">
+                                                <div className="truncate text-gray-800">{adj.description || adj.note || "Adjustment"}</div>
+                                                <div className={`text-[11px] ${adj.kind === "deduction" ? "text-red-600" : "text-emerald-600"}`}>
+                                                  {capitalize(adj.kind || "earning")}
+                                                </div>
+                                              </div>
+                                              <span className={`font-mono font-semibold ${adj.kind === "deduction" ? "text-red-600" : "text-emerald-600"}`}>
+                                                {adj.kind === "deduction" ? "-" : "+"}{currency(Math.abs(Number(adj.amount || 0)))}
+                                              </span>
                                             </li>
                                           ))}
                                         </ul>
@@ -721,6 +867,32 @@ export default function PayrollRunDetailPage() {
                   </tbody>
                 </table>
               </div>
+              {filteredPayrolls.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  <p>
+                    Showing <span className="font-semibold text-gray-900">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-semibold text-gray-900">{Math.min(currentPage * pageSize, filteredPayrolls.length)}</span> of <span className="font-semibold text-gray-900">{filteredPayrolls.length}</span> payroll lines
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </button>
+                    <span className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import api from "@/services/api";
 import { getToken } from "@/utils/auth";
-import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { departmentsService } from "@/services/departments";
+import type { Department } from "@/types/hr";
+import { Search, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, ChevronDown, Download, Upload, X, Filter, ShieldCheck, ChevronsUpDown, History } from "lucide-react";
+import ExportEmployeesButton from "@/components/employees/ExportEmployeesButton";
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 
 interface Employee {
@@ -28,6 +31,19 @@ interface Employee {
     avatar_url?: string | null;
     profile_photo_url?: string | null;
   } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface ImportErrorItem {
+  row: number;
+  messages: string[];
+}
+
+interface ImportResult {
+  success_count: number;
+  failed_count: number;
+  errors: ImportErrorItem[];
 }
 
 export default function EmployeesPage() {
@@ -35,9 +51,24 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [brokenPhotos, setBrokenPhotos] = useState<Record<number, boolean>>({});
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState("");
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<"" | "active" | "inactive">("");
+  const [bulkDepartment, setBulkDepartment] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [expandedAuditRow, setExpandedAuditRow] = useState<number | null>(null);
 
   const getApiErrorMessage = (err: unknown, fallback: string) => {
     const msg =
@@ -77,9 +108,19 @@ export default function EmployeesPage() {
       return;
     }
     fetchEmployees();
+    fetchDepartments();
     // We intentionally fetch once; search/pagination happen client-side to avoid extra API calls.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const { data } = await departmentsService.list();
+      setDepartments(data);
+    } catch (err) {
+      console.error("Failed to fetch departments", err);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -147,15 +188,97 @@ export default function EmployeesPage() {
     }
   };
 
-  const filteredEmployees = employees.filter((emp) => {
-    const term = search.trim().toLowerCase();
-    if (!term) return true;
-    return (
-      emp.employee_code?.toLowerCase().includes(term) ||
-      `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(term) ||
-      emp.email?.toLowerCase().includes(term)
-    );
-  });
+  const getFileNameFromContentDisposition = (headerValue?: string): string => {
+    if (!headerValue) return "employee-import-template.xlsx";
+    const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+    const simpleMatch = headerValue.match(/filename="?([^";]+)"?/i);
+    if (simpleMatch?.[1]) return simpleMatch[1];
+    return "employee-import-template.xlsx";
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true);
+      const response = await api.get("/api/v1/admin/employees/template", {
+        responseType: "blob",
+      });
+
+      const fileName = getFileNameFromContentDisposition(response.headers?.["content-disposition"]);
+      const blob = new Blob([response.data], {
+        type:
+          response.headers?.["content-type"] ||
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to download template"));
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleImportEmployees = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importFile) {
+      setImportError("Please choose an .xlsx file.");
+      return;
+    }
+
+    try {
+      setImporting(true);
+      setImportError("");
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const res = await api.post("/api/v1/admin/employees/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const payload = res.data?.data || res.data || {};
+      const normalizedResult: ImportResult = {
+        success_count: Number(payload.success_count || 0),
+        failed_count: Number(payload.failed_count || 0),
+        errors: Array.isArray(payload.errors)
+          ? payload.errors.map((item: any) => ({
+              row: Number(item?.row || 0),
+              messages: Array.isArray(item?.messages)
+                ? item.messages.map((m: unknown) => String(m))
+                : [],
+            }))
+          : [],
+      };
+
+      setImportResult(normalizedResult);
+      await fetchEmployees();
+    } catch (err) {
+      setImportError(getApiErrorMessage(err, "Failed to import employees"));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      const term = search.trim().toLowerCase();
+      const matchesSearch = !term || (
+        emp.employee_code?.toLowerCase().includes(term) ||
+        `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(term) ||
+        emp.email?.toLowerCase().includes(term)
+      );
+      const matchesDept = !selectedDepartment || emp.department === selectedDepartment;
+      const matchesStatus = !selectedStatus || emp.status === selectedStatus;
+
+      return matchesSearch && matchesDept && matchesStatus;
+    });
+  }, [employees, search, selectedDepartment, selectedStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / perPage));
   const currentPage = Math.min(page, totalPages);
@@ -163,6 +286,145 @@ export default function EmployeesPage() {
     (currentPage - 1) * perPage,
     currentPage * perPage
   );
+
+  useEffect(() => {
+    if (!showImportModal) return;
+    const timer = window.setTimeout(() => {
+      importFileInputRef.current?.focus();
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [showImportModal]);
+
+  useEffect(() => {
+    const visibleIds = new Set(filteredEmployees.map((emp) => emp.id));
+    setSelectedIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      if (next.length === current.length && next.every((id, index) => id === current[index])) {
+        return current;
+      }
+      return next;
+    });
+  }, [filteredEmployees]);
+
+  const allPageSelected = paginatedEmployees.length > 0 && paginatedEmployees.every((emp) => selectedIds.includes(emp.id));
+
+  const toggleSelectAllPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds((current) => Array.from(new Set([...current, ...paginatedEmployees.map((emp) => emp.id)])));
+      return;
+    }
+    const pageIds = new Set(paginatedEmployees.map((emp) => emp.id));
+    setSelectedIds((current) => current.filter((id) => !pageIds.has(id)));
+  };
+
+  const applyBulkUpdate = async () => {
+    if (selectedIds.length === 0) {
+      setError("Select at least one employee first.");
+      return;
+    }
+
+    if (!bulkStatus && !bulkDepartment) {
+      setError("Pick a status or department before applying bulk update.");
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      setError("");
+
+      const payload: Record<string, unknown> = {};
+      if (bulkStatus) payload.status = bulkStatus;
+      if (bulkDepartment) payload.department = bulkDepartment;
+
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => api.patch(`/api/v1/employees/${id}`, payload))
+      );
+
+      const successCount = results.filter((res) => res.status === "fulfilled").length;
+      if (successCount > 0) {
+        setEmployees((prev) => prev.map((emp) => (selectedIds.includes(emp.id) ? { ...emp, ...(payload as Partial<Employee>) } : emp)));
+      }
+
+      if (successCount !== selectedIds.length) {
+        setError(`Updated ${successCount}/${selectedIds.length} records. Some rows could not be updated.`);
+      } else {
+        setSelectedIds([]);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const applyBulkDelete = async () => {
+    if (selectedIds.length === 0) {
+      setError("Select at least one employee first.");
+      return;
+    }
+
+    if (!confirm(`Delete ${selectedIds.length} selected employee(s)?`)) return;
+
+    try {
+      setBulkLoading(true);
+      setError("");
+      const results = await Promise.allSettled(
+        selectedIds.map(async (id) => {
+          try {
+            await api.delete(`/api/v1/employees/${id}`);
+          } catch {
+            try {
+              await api.post(`/api/v1/employees/${id}`, { _method: "DELETE" });
+            } catch {
+              await api.post(`/api/v1/employees/${id}/delete`);
+            }
+          }
+        })
+      );
+      const successCount = results.filter((res) => res.status === "fulfilled").length;
+
+      setEmployees((prev) => prev.filter((emp) => !selectedIds.includes(emp.id)));
+      setSelectedIds([]);
+
+      if (successCount !== results.length) {
+        setError(`Deleted ${successCount}/${results.length} selected employees. Some could not be deleted.`);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Bulk delete failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const getAuditTrail = (emp: Employee) => {
+    const rows: Array<{ label: string; when: string; tone: "blue" | "emerald" | "amber" }> = [];
+
+    if (emp.created_at) {
+      rows.push({
+        label: "Employee profile created",
+        when: new Date(emp.created_at).toLocaleString(),
+        tone: "blue",
+      });
+    }
+
+    if (emp.updated_at && emp.updated_at !== emp.created_at) {
+      rows.push({
+        label: "Profile information updated",
+        when: new Date(emp.updated_at).toLocaleString(),
+        tone: "emerald",
+      });
+    }
+
+    rows.push({
+      label: `Current status: ${emp.status || "active"}`,
+      when: emp.updated_at ? new Date(emp.updated_at).toLocaleString() : "Current snapshot",
+      tone: "amber",
+    });
+
+    return rows;
+  };
 
   return (
     <HRMSSidebar>
@@ -173,29 +435,100 @@ export default function EmployeesPage() {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Members</h1>
             <p className="text-gray-500 mt-1 text-sm">Manage your employees, roles, and permissions.</p>
           </div>
-          <Link
-            href="/employees/create"
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 font-medium group"
-          >
-            <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            Add New Employee
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/employees/create"
+              className="ui-btn inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Employee
+            </Link>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+              className="ui-btn inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all shadow-sm hover:shadow text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              {downloadingTemplate ? "Downloading..." : "Download Template"}
+            </button>
+            <ExportEmployeesButton
+              filters={{
+                department: selectedDepartment || undefined,
+                status: selectedStatus || undefined,
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setShowImportModal(true);
+                setImportError("");
+              }}
+              className="ui-btn inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              Import Employees
+            </button>
+          </div>
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative flex-1 w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or ID..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
-            />
+        <div className="ui-card bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full sm:max-w-4xl">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name, email, or ID..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
+              />
+            </div>
+            
+            <div className="relative w-full sm:w-48">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedDepartment}
+                onChange={(e) => {
+                  setSelectedDepartment(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 appearance-none cursor-pointer"
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="relative w-full sm:w-44">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-900 appearance-none cursor-pointer"
+              >
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
           </div>
           
           <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -220,6 +553,65 @@ export default function EmployeesPage() {
           </div>
         </div>
 
+        {selectedIds.length > 0 && (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 transition-all">
+            <div className="flex items-center gap-2 text-indigo-900">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="text-sm font-semibold">{selectedIds.length} selected</span>
+              <span className="text-xs text-indigo-700">Bulk actions (Admin)</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value as "" | "active" | "inactive")}
+                className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-gray-800"
+              >
+                <option value="">Status</option>
+                <option value="active">Activate</option>
+                <option value="inactive">Deactivate</option>
+              </select>
+
+              <select
+                value={bulkDepartment}
+                onChange={(e) => setBulkDepartment(e.target.value)}
+                className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-gray-800"
+              >
+                <option value="">Department</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.name}>{dept.name}</option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={applyBulkUpdate}
+                disabled={bulkLoading}
+                className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-60"
+              >
+                {bulkLoading ? "Applying..." : "Apply Bulk"}
+              </button>
+
+              <button
+                type="button"
+                onClick={applyBulkDelete}
+                disabled={bulkLoading}
+                className="px-3 py-2 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 transition-colors disabled:opacity-60"
+              >
+                {bulkLoading ? "Deleting..." : "Delete Selected"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -236,11 +628,20 @@ export default function EmployeesPage() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="ui-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50/50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                      <th className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={allPageSelected}
+                          onChange={(e) => toggleSelectAllPage(e.target.checked)}
+                          className="rounded border-gray-300 text-blue-600"
+                          aria-label="Select all rows on current page"
+                        />
+                      </th>
                       <th className="px-6 py-4">Employee</th>
                       <th className="px-6 py-4">Role & Dept</th>
                       <th className="px-6 py-4">Contact</th>
@@ -250,7 +651,29 @@ export default function EmployeesPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {paginatedEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-gray-50/80 transition-colors group">
+                      <Fragment key={emp.id}>
+                      <tr className="ui-row-hover hover:bg-gray-50/80 transition-colors group">
+                        <td className="px-6 py-4 align-top">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(emp.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds((current) => {
+                                  if (current.includes(emp.id)) return current;
+                                  return [...current, emp.id];
+                                });
+                              } else {
+                                setSelectedIds((current) => {
+                                  if (!current.includes(emp.id)) return current;
+                                  return current.filter((id) => id !== emp.id);
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600"
+                            aria-label={`Select ${emp.first_name} ${emp.last_name}`}
+                          />
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {(() => {
@@ -311,16 +734,24 @@ export default function EmployeesPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedAuditRow((current) => (current === emp.id ? null : emp.id))}
+                              className="ui-icon-btn p-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-100"
+                              title="Audit Trail"
+                            >
+                              <History className="w-4 h-4" />
+                            </button>
                             <Link
                               href={`/employees/${emp.id}/edit`}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="ui-icon-btn p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
                               title="Edit Employee"
                             >
                               <Edit2 className="w-4 h-4" />
                             </Link>
                             <button
                               onClick={() => handleDeleteEmployee(emp.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="ui-icon-btn p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-100"
                               title="Delete Employee"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -328,6 +759,33 @@ export default function EmployeesPage() {
                           </div>
                         </td>
                       </tr>
+                      {expandedAuditRow === emp.id && (
+                        <tr className="bg-slate-50/80">
+                          <td colSpan={6} className="px-6 py-4 border-t border-slate-100">
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <ChevronsUpDown className="w-4 h-4 text-slate-500" />
+                                <p className="text-sm font-semibold text-slate-900">Audit Trail</p>
+                                <span className="text-xs text-slate-500">{emp.first_name} {emp.last_name}</span>
+                              </div>
+                              <div className="space-y-2">
+                                {getAuditTrail(emp).map((entry, idx) => (
+                                  <div key={`${emp.id}-${idx}`} className="flex items-start gap-2 text-sm">
+                                    <span
+                                      className={`mt-1.5 inline-block h-2 w-2 rounded-full ${entry.tone === "blue" ? "bg-blue-500" : entry.tone === "emerald" ? "bg-emerald-500" : "bg-amber-500"}`}
+                                    />
+                                    <div>
+                                      <p className="text-slate-800">{entry.label}</p>
+                                      <p className="text-xs text-slate-500">{entry.when}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -343,7 +801,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="ui-btn flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Previous
@@ -351,7 +809,7 @@ export default function EmployeesPage() {
                     <button
                       onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      className="ui-btn flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                     >
                       Next
                       <ChevronRight className="w-4 h-4" />
@@ -363,6 +821,99 @@ export default function EmployeesPage() {
           </>
         )}
       </div>
+
+      {showImportModal && (
+        <div className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowImportModal(false)} />
+          <div className="ui-modal-panel relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Import Employees</h3>
+                <p className="text-sm text-gray-500">Upload Excel (.xlsx) file to bulk create employees.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleImportEmployees} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Excel file</label>
+                <input
+                  ref={importFileInputRef}
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setImportFile(file);
+                    setImportResult(null);
+                    setImportError("");
+                  }}
+                  className="w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+
+              {importError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {importError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={importing}
+                  className="ui-btn inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm hover:shadow font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Upload className="w-4 h-4" />
+                  {importing ? "Importing..." : "Import"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="ui-btn px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              {importResult && (
+                <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-900">Import Result</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg bg-green-50 border border-green-100 p-3">
+                      <p className="text-xs text-green-700 font-semibold uppercase">Success Count</p>
+                      <p className="text-xl font-bold text-green-700">{importResult.success_count}</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
+                      <p className="text-xs text-amber-700 font-semibold uppercase">Failed Count</p>
+                      <p className="text-xl font-bold text-amber-700">{importResult.failed_count}</p>
+                    </div>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div className="rounded-lg border border-red-100 bg-white p-3">
+                      <p className="text-sm font-semibold text-red-700 mb-2">Row Errors</p>
+                      <ul className="space-y-1 text-sm text-red-700 max-h-52 overflow-auto pr-1">
+                        {importResult.errors.map((item, idx) => (
+                          <li key={`${item.row}-${idx}`}>
+                            Row {item.row}: {item.messages.join(", ")}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </HRMSSidebar>
   );
 }

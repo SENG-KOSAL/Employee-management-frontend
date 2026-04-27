@@ -614,7 +614,7 @@ export default function CreateLeaveRequestPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {loading ? "Submitting..." : "Create Request"}
               </button>

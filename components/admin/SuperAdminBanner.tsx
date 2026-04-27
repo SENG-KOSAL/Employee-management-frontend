@@ -11,15 +11,17 @@ export default function SuperAdminBanner() {
   // Only show banner when Super Admin is in Support Mode.
   if (!isSupportMode) return null;
 
+  const companyLabel = activeCompany?.name || activeCompany?.id || "(unknown)";
+
   return (
-    <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between shadow-md relative z-[9999]">
+    <div className="bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-4 py-2.5 flex items-center justify-between shadow-md relative z-[9999] border-b border-blue-200/40">
       <div className="flex items-center gap-2 font-medium">
         <ShieldAlert className="w-5 h-5" />
         <span>
-          Viewing Company: <strong>{activeCompany?.name || activeCompany?.id || "(unknown)"}</strong> (Support Mode). Full admin access enabled.
+          Viewing Company: <strong>{companyLabel}</strong> (Support Mode). Full admin access enabled.
         </span>
       </div>
-      <ExitSupportModeButton className="bg-white text-amber-600 hover:bg-amber-50 px-3 py-1 rounded text-sm font-bold flex items-center gap-1 transition-colors" />
+      <ExitSupportModeButton className="bg-white text-blue-700 hover:bg-blue-50 px-3 py-1 rounded text-sm font-bold flex items-center gap-1 transition-colors" />
     </div>
   );
 }

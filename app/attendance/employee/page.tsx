@@ -175,7 +175,7 @@ export default function EmployeeAttendancePage() {
               <button
                 onClick={() => handleClock("in")}
                 disabled={clocking || !!todayStatus?.check_in}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
               >
                 <Clock className="w-4 h-4 inline mr-2" />
                 Clock In

@@ -180,7 +180,7 @@ export default function LeaveTypeEditPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save changes"}
             </button>
