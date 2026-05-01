@@ -1,0 +1,1993 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useParams } from "next/navigation";
+import api from "@/services/api";
+import { benefitsService } from "@/services/benefits";
+import { leaveTypesService } from "@/services/leaveTypes";
+import { leaveAllocationsService, type LeaveAllocation } from "@/services/leaveAllocations";
+import type { LeaveType } from "@/types/hr";
+import { getToken } from "@/utils/auth";
+import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
+import { ArrowLeft, User, Lock, Gift, CalendarClock, Clock, Shield, FileText } from "lucide-react";
+import { workSchedulesService } from "@/services/workSchedules";
+import EmployeePhotoUploader from "@/components/employees/EmployeePhotoUploader";
+import { uploadEmployeeDocuments, type EmployeeDocumentsUpload } from "@/services/employees";
+
+type TabType = "personal" | "account" | "legal" | "documents" | "benefits" | "attendance" | "work-schedule";
+
+interface CatalogItem {
+  id?: number | string;
+  name?: string;
+  benefit_name?: string;
+  deduction_name?: string;
+  amount?: number;
+  type?: "fixed" | "percentage" | string;
+  kind?: "benefit" | "deduction";
+}
+
+interface FormData {
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  gender: string;
+  date_of_birth: string;
+  address: string;
+  department: string;
+  position: string;
+  start_date: string;
+  salary: number;
+  status: string;
+  name: string;
+  password: string;
+  confirm_password: string;
+  role: string;
+  // Legal + Emergency
+  nationality: string;
+  national_id_number: string;
+  nssf_number: string;
+  passport_number: string;
+  work_permit_number: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  emergency_contact_relationship: string;
+  health_insurance: boolean;
+  retirement_plan: boolean; 
+  dental_coverage: boolean;
+  vision_coverage: boolean;
+  tax_percentage: number;
+  social_security_percentage: number;
+  health_insurance_deduction: number;
+}
+
+const tabs: { id: TabType; label: string; icon: any }[] = [
+  { id: "personal", label: "Personal Info", icon: User },
+  { id: "account", label: "User Account", icon: Lock },
+  { id: "legal", label: "Legal & Emergency", icon: Shield },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "benefits", label: "Benefits & Deductions", icon: Gift },
+  { id: "attendance", label: "Attendance & Leave", icon: CalendarClock },
+  { id: "work-schedule", label: "Work Schedule", icon: Clock },
+];
+
+export default function EditEmployeePage() {
+  const router = useRouter();
+  const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : (params as any)?.id;
+
+  const [activeTab, setActiveTab] = useState<TabType>("personal");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<{
+    id_card_file_path?: string | null;
+    contract_file_path?: string | null;
+    cv_file_path?: string | null;
+    certificate_file_path?: string | null;
+  } | null>(null);
+  const [documentFiles, setDocumentFiles] = useState<EmployeeDocumentsUpload>({});
+  const [documentsUploading, setDocumentsUploading] = useState(false);
+  const [documentsNotice, setDocumentsNotice] = useState<string>("");
+  const [catalogBenefits, setCatalogBenefits] = useState<CatalogItem[]>([]);
+  const [catalogDeductions, setCatalogDeductions] = useState<CatalogItem[]>([]);
+  const [availableBenefits, setAvailableBenefits] = useState<CatalogItem[]>([]);
+  const [availableDeductions, setAvailableDeductions] = useState<CatalogItem[]>([]);
+  const [benefitToAdd, setBenefitToAdd] = useState<string>("");
+  const [deductionToAdd, setDeductionToAdd] = useState<string>("");
+  const [addingBenefit, setAddingBenefit] = useState(false);
+  const [addingDeduction, setAddingDeduction] = useState(false);
+  const [benefitEdits, setBenefitEdits] = useState<CatalogItem[]>([]);
+  const [deductionEdits, setDeductionEdits] = useState<CatalogItem[]>([]);
+  const [initialBenefits, setInitialBenefits] = useState<CatalogItem[]>([]);
+  const [initialDeductions, setInitialDeductions] = useState<CatalogItem[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [leaveTypesLoading, setLeaveTypesLoading] = useState(false);
+  const [leaveTypesError, setLeaveTypesError] = useState("");
+  const [allocations, setAllocations] = useState<LeaveAllocation[]>([]);
+  const [allocationEdits, setAllocationEdits] = useState<Record<number, {
+    leave_type_id: number;
+    year: number;
+    days_allocated: number;
+    days_used: number;
+    note?: string;
+  }>>({});
+  const [allocationForm, setAllocationForm] = useState({
+    leave_type_id: "",
+    year: String(new Date().getFullYear()),
+    days_allocated: "",
+    days_used: "0",
+    note: "",
+  });
+  const [allocLoading, setAllocLoading] = useState(false);
+  const [allocError, setAllocError] = useState("");
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [schedulesError, setSchedulesError] = useState("");
+  const [assigningSchedule, setAssigningSchedule] = useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
+  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [scheduleAssignError, setScheduleAssignError] = useState("");
+  const [scheduleAssignSuccess, setScheduleAssignSuccess] = useState("");
+  const [currentSchedule, setCurrentSchedule] = useState<any>(null);
+  const [formData, setFormData] = useState<FormData>({
+    employee_code: "",
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    gender: "male",
+    date_of_birth: "",
+    address: "",
+    department: "",
+    position: "",
+    start_date: "",
+    salary: 0,
+    status: "active",
+    name: "",
+    password: "",
+    confirm_password: "",
+    role: "employee",
+    nationality: "",
+    national_id_number: "",
+    nssf_number: "",
+    passport_number: "",
+    work_permit_number: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+    emergency_contact_relationship: "",
+    health_insurance: false,
+    retirement_plan: false,
+    dental_coverage: false,
+    vision_coverage: false,
+    tax_percentage: 15,
+    social_security_percentage: 6.2,
+    health_insurance_deduction: 0,
+  });
+
+  const loadLeaveTypes = async () => {
+    try {
+      setLeaveTypesLoading(true);
+      setLeaveTypesError("");
+      const res = await leaveTypesService.list();
+      const items = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setLeaveTypes(Array.isArray(items) ? items : []);
+    } catch (err) {
+      console.error("Failed to load leave types", err);
+      setLeaveTypesError("Unable to load leave types");
+      setLeaveTypes([]);
+    } finally {
+      setLeaveTypesLoading(false);
+    }
+  };
+
+  const getDefaultDaysForLeaveType = (leaveTypeId?: string | number) => {
+    const ltId = Number(leaveTypeId);
+    const selected = leaveTypes.find((lt) => Number(lt.id) === ltId);
+    const candidate = selected?.default_days ?? selected?.days_per_year ?? 0;
+    return Number.isFinite(Number(candidate)) ? Number(candidate) : 0;
+  };
+
+  const loadSchedules = async () => {
+    try {
+      setSchedulesLoading(true);
+      setSchedulesError("");
+      const res = await workSchedulesService.list();
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      setSchedules(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load work schedules", err);
+      setSchedulesError("Unable to load work schedules");
+      setSchedules([]);
+    } finally {
+      setSchedulesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.push("/auth/login");
+      return;
+    }
+    if (id) fetchEmployee(id);
+    loadLeaveTypes();
+    loadSchedules();
+  }, [id, router]);
+
+  const hasSelectedDocuments = Boolean(
+    documentFiles.id_card || documentFiles.contract || documentFiles.cv || documentFiles.certificate
+  );
+
+  const resolveFileUrl = (filePath?: string | null) => {
+    if (!filePath) return "";
+    const raw = String(filePath);
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+    if (!apiBase) return raw;
+    const base = apiBase.replace(/\/$/, "");
+    if (raw.startsWith("/")) return `${base}${raw}`;
+    return `${base}/${raw.replace(/^\//, "")}`;
+  };
+
+  const fetchEmployee = async (empId: string | number) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const coerceRows = (raw: any) => {
+        const listData = raw?.data?.data ?? raw?.data;
+        return Array.isArray(listData) ? listData : Array.isArray(listData?.data) ? listData.data : [];
+      };
+
+      let data: any = null;
+      let detailError: any = null;
+      try {
+        const empRes = await api.get(`/api/v1/employees/${empId}`);
+        data = empRes?.data?.data ?? empRes?.data ?? null;
+      } catch (err: any) {
+        detailError = err;
+      }
+
+      if (!data) {
+        try {
+          const listRes = await api.get("/api/v1/employees?per_page=500");
+          const rows = coerceRows(listRes);
+          const found = rows.find((e: any) => String(e?.id) === String(empId));
+          if (found) {
+            data = found;
+            setSuccess("Loaded limited employee data from list view. Some fields may be unavailable for your role.");
+          }
+        } catch (listErr) {
+          console.error(listErr);
+        }
+      }
+
+      if (!data) {
+        const status = detailError?.response?.status as number | undefined;
+        const message = detailError?.response?.data?.message as string | undefined;
+        setError(message || (status === 404 ? "Employee not found in current company" : "Failed to load employee"));
+        return;
+      }
+
+      const [benRes, dedRes, catalogBenRes, catalogDedRes] = await Promise.allSettled([
+        benefitsService.listBenefits(empId),
+        benefitsService.listDeductions(empId),
+        benefitsService.listBenefits(),
+        benefitsService.listDeductions(),
+      ]);
+
+      let allocationsRes: any = null;
+      try {
+        allocationsRes = await leaveAllocationsService.listByEmployee(Number(empId));
+      } catch (allocErr) {
+        console.warn('Leave allocations lookup failed', allocErr);
+      }
+
+      const docs = (() => {
+        if (!data || typeof data !== "object") return null;
+        const rec = data as Record<string, unknown>;
+        const value = rec.documents;
+        if (!value || typeof value !== "object") return null;
+        return value as Record<string, unknown>;
+      })();
+
+      setDocuments(
+        docs
+          ? {
+              id_card_file_path: typeof docs.id_card_file_path === "string" ? docs.id_card_file_path : null,
+              contract_file_path: typeof docs.contract_file_path === "string" ? docs.contract_file_path : null,
+              cv_file_path: typeof docs.cv_file_path === "string" ? docs.cv_file_path : null,
+              certificate_file_path: typeof docs.certificate_file_path === "string" ? docs.certificate_file_path : null,
+            }
+          : null
+      );
+
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+      const extractPhotoUrl = (obj: unknown): string | null => {
+        if (!obj || typeof obj !== "object") return null;
+        const rec = obj as Record<string, unknown>;
+        const raw =
+          rec.photo_url ??
+          rec.photoUrl ??
+          rec.photo ??
+          rec.avatar_url ??
+          rec.avatar ??
+          rec.profile_photo_url ??
+          rec.profile_image_url ??
+          rec.image_url ??
+          rec.image ??
+          null;
+        if (raw === null || raw === undefined) return null;
+        const url = String(raw);
+        if (url.startsWith("/") && apiBase) return `${apiBase.replace(/\/$/, "")}${url}`;
+        return url;
+      };
+      setPhotoUrl(extractPhotoUrl(data));
+
+      const pickListData = (result: PromiseSettledResult<any>) => {
+        if (result.status !== "fulfilled") {
+          console.warn("Optional edit dependency failed", result.reason);
+          return [];
+        }
+        return (result.value as any)?.data?.data ?? (result.value as any)?.data ?? [];
+      };
+
+      const benefitsListRaw = pickListData(benRes);
+      const deductionsListRaw = pickListData(dedRes);
+      const catalogBenefitsRaw = pickListData(catalogBenRes);
+      const catalogDeductionsRaw = pickListData(catalogDedRes);
+
+      const normalizedBenefits: CatalogItem[] = Array.isArray(benefitsListRaw)
+        ? benefitsListRaw.map((b: any) => ({
+            id: b.id,
+            benefit_name: b.benefit_name || b.name,
+            amount: Number(b.amount ?? 0),
+            type: b.type === "percentage" ? "percentage" : "fixed",
+          }))
+        : [];
+
+      const normalizedDeductions: CatalogItem[] = Array.isArray(deductionsListRaw)
+        ? deductionsListRaw.map((d: any) => ({
+            id: d.id,
+            deduction_name: d.deduction_name || d.name,
+            amount: Number(d.amount ?? 0),
+            type: d.type === "percentage" ? "percentage" : "fixed",
+          }))
+        : [];
+
+      setCatalogBenefits(normalizedBenefits);
+      setCatalogDeductions(normalizedDeductions);
+  setBenefitEdits(normalizedBenefits);
+  setDeductionEdits(normalizedDeductions);
+  setInitialBenefits(normalizedBenefits);
+  setInitialDeductions(normalizedDeductions);
+
+      const normalizeAll = (list: any[], kind: "benefit" | "deduction") =>
+        Array.isArray(list)
+          ? list
+              .filter((item) => item && (item.benefit_name || item.deduction_name || item.name))
+              .map((item) => ({
+                id: item.id,
+                benefit_name: kind === "benefit" ? item.benefit_name || item.name : undefined,
+                deduction_name: kind === "deduction" ? item.deduction_name || item.name : undefined,
+                name: item.name,
+                amount: Number(item.amount ?? 0),
+                type: item.type === "percentage" ? "percentage" : "fixed",
+              }))
+          : [];
+
+      const allBenefits = normalizeAll(catalogBenefitsRaw, "benefit");
+      const allDeductions = normalizeAll(catalogDeductionsRaw, "deduction");
+
+      const filterAvailable = (all: CatalogItem[], assigned: CatalogItem[]) =>
+        all.filter((item) => !assigned.some((a) => Number(a.id) === Number(item.id)));
+
+      setAvailableBenefits(filterAvailable(allBenefits, normalizedBenefits));
+      setAvailableDeductions(filterAvailable(allDeductions, normalizedDeductions));
+
+      setFormData((prev) => ({
+        ...prev,
+        employee_code: data.employee_code || "",
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        gender: data.gender || "male",
+        date_of_birth: data.date_of_birth || "",
+        address: data.address || "",
+        department: data.department || "",
+        position: data.position || "",
+        start_date: data.start_date || "",
+        salary: data.salary ?? 0,
+        status: data.status || "active",
+        name: data.user?.name || data.full_name || "",
+        role: data.role || data.user?.role || "employee",
+        // keep password empty for security
+        password: "",
+        confirm_password: "",
+        // optional nested
+        health_insurance: data.benefits?.health_insurance ?? false,
+        retirement_plan: data.benefits?.retirement_plan ?? false,
+        dental_coverage: data.benefits?.dental_coverage ?? false,
+        vision_coverage: data.benefits?.vision_coverage ?? false,
+        tax_percentage: data.deductions?.tax_percentage ?? 15,
+        social_security_percentage: data.deductions?.social_security_percentage ?? 6.2,
+        health_insurance_deduction: data.deductions?.health_insurance_deduction ?? 0,
+        nationality: data.nationality || "",
+        national_id_number: data.national_id_number || "",
+        nssf_number: data.nssf_number || "",
+        passport_number: data.passport_number || "",
+        work_permit_number: data.work_permit_number || "",
+        emergency_contact_name: data.emergency_contact_name || "",
+        emergency_contact_phone: data.emergency_contact_phone || "",
+        emergency_contact_relationship: data.emergency_contact_relationship || "",
+      }));
+      setSelectedScheduleId(data?.work_schedule_id ? String(data.work_schedule_id) : "");
+      setScheduleEffectiveFrom(
+        data?.work_schedule?.effective_from
+          ? String(data.work_schedule.effective_from).slice(0, 10)
+          : new Date().toISOString().slice(0, 10)
+      );
+      setCurrentSchedule(data?.work_schedule ?? null);
+      const allocList = allocationsRes ? (allocationsRes as any)?.data?.data ?? (allocationsRes as any)?.data ?? [] : [];
+      const normalizedAllocations: LeaveAllocation[] = Array.isArray(allocList) ? allocList : [];
+      setAllocations(normalizedAllocations);
+      const edits: Record<number, { leave_type_id: number; year: number; days_allocated: number; days_used: number; note?: string; }> = {};
+      normalizedAllocations.forEach((alloc) => {
+        edits[alloc.id] = {
+          leave_type_id: Number(alloc.leave_type_id),
+          year: Number(alloc.year ?? new Date().getFullYear()),
+          days_allocated: Number(alloc.days_allocated ?? 0),
+          days_used: Number(alloc.days_used ?? 0),
+          note: alloc.note ?? "",
+        };
+      });
+      setAllocationEdits(edits);
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || "Failed to load employee");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value, type } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
+    }));
+  };
+
+  const updateDocumentFile = (key: keyof EmployeeDocumentsUpload, file: File | null) => {
+    setDocumentFiles((prev) => ({
+      ...prev,
+      [key]: file,
+    }));
+  };
+
+  const handleDocumentsUpload = async () => {
+    if (!id) return;
+    if (!hasSelectedDocuments) {
+      setDocumentsNotice("Please select at least one document to upload.");
+      return;
+    }
+
+    try {
+      setDocumentsUploading(true);
+      setDocumentsNotice("");
+
+      const hasExisting = Boolean(
+        documents && Object.values(documents).some((v) => (v ? String(v).trim().length > 0 : false))
+      );
+      const method = hasExisting ? "patch" : "post";
+
+      const res = await uploadEmployeeDocuments(id, documentFiles, method);
+
+      const responseData = (res as unknown as { data?: unknown })?.data;
+      const payload = (() => {
+        if (!responseData || typeof responseData !== "object") return null;
+        const top = responseData as Record<string, unknown>;
+        const maybeData = top.data;
+        if (maybeData && typeof maybeData === "object") return maybeData as Record<string, unknown>;
+        return top;
+      })();
+
+      const nextDocs = (() => {
+        if (!payload) return null;
+        const value = payload.documents;
+        if (!value || typeof value !== "object") return null;
+        return value as Record<string, unknown>;
+      })();
+
+      if (nextDocs) {
+        setDocuments({
+          id_card_file_path: typeof nextDocs.id_card_file_path === "string" ? nextDocs.id_card_file_path : null,
+          contract_file_path: typeof nextDocs.contract_file_path === "string" ? nextDocs.contract_file_path : null,
+          cv_file_path: typeof nextDocs.cv_file_path === "string" ? nextDocs.cv_file_path : null,
+          certificate_file_path: typeof nextDocs.certificate_file_path === "string" ? nextDocs.certificate_file_path : null,
+        });
+      }
+      setDocumentFiles({});
+      setDocumentsNotice("Documents uploaded successfully.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Documents upload failed";
+      setDocumentsNotice(msg);
+    } finally {
+      setDocumentsUploading(false);
+    }
+  };
+
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: checked,
+    }));
+  };
+
+  const handleAllocationFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    // When leave type changes, auto-fill days with the leave type default if not already set
+    if (name === "leave_type_id") {
+      const defaultDays = getDefaultDaysForLeaveType(value);
+      setAllocationForm((prev) => ({
+        ...prev,
+        [name]: value,
+        days_allocated: prev.days_allocated === "" ? String(defaultDays) : prev.days_allocated,
+      }));
+      return;
+    }
+    setAllocationForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAllocationEditChange = (
+    id: number,
+    field: keyof { leave_type_id: number; year: number; days_allocated: number; days_used: number; note?: string },
+    value: string
+  ) => {
+    setAllocationEdits((prev) => ({
+      ...prev,
+      [id]: {
+        leave_type_id: Number(field === "leave_type_id" ? value : prev[id]?.leave_type_id ?? 0),
+        year: Number(field === "year" ? value : prev[id]?.year ?? new Date().getFullYear()),
+        days_allocated: Number(field === "days_allocated" ? value : prev[id]?.days_allocated ?? 0),
+        days_used: Number(field === "days_used" ? value : prev[id]?.days_used ?? 0),
+        note: field === "note" ? value : prev[id]?.note ?? "",
+      },
+    }));
+  };
+
+  const updateBenefitEdit = (id: CatalogItem["id"], field: "amount" | "type", value: any) => {
+    setBenefitEdits((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: field === "amount" ? Number(value) : value } : item))
+    );
+  };
+
+  const updateDeductionEdit = (id: CatalogItem["id"], field: "amount" | "type", value: any) => {
+    setDeductionEdits((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: field === "amount" ? Number(value) : value } : item))
+    );
+  };
+
+  const addBenefitFromCatalog = async () => {
+    const selected = availableBenefits.find((b) => String(b.id) === String(benefitToAdd));
+    if (!selected || !id) return;
+    try {
+      setAddingBenefit(true);
+      const basePayload = {
+        employee_id: Number(id),
+        benefit_name: selected.benefit_name || selected.name || "Benefit",
+        name: selected.name || selected.benefit_name || "Benefit",
+        amount: Number(selected.amount ?? 0),
+        type: selected.type === "percentage" ? "percentage" : "fixed",
+      } as const;
+
+      try {
+        await benefitsService.createBenefit({
+          ...basePayload,
+          benefit_id: Number(selected.id),
+        });
+      } catch (err: any) {
+        // Fallback: try without benefit_id in case backend doesn't accept it
+        await benefitsService.createBenefit(basePayload as any);
+      }
+      setBenefitToAdd("");
+      const newItem: CatalogItem = {
+        id: selected.id,
+        benefit_name: selected.benefit_name || selected.name || "Benefit",
+        name: selected.name || selected.benefit_name || "Benefit",
+        amount: Number(selected.amount ?? 0),
+        type: selected.type === "percentage" ? "percentage" : "fixed",
+      };
+      setBenefitEdits((prev) => [...prev, newItem]);
+      setInitialBenefits((prev) => [...prev, newItem]);
+      setAvailableBenefits((prev) => prev.filter((b) => Number(b.id) !== Number(selected.id)));
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || "Failed to add benefit");
+    } finally {
+      setAddingBenefit(false);
+    }
+  };
+
+  const addDeductionFromCatalog = async () => {
+    const selected = availableDeductions.find((d) => String(d.id) === String(deductionToAdd));
+    if (!selected || !id) return;
+    try {
+      setAddingDeduction(true);
+      const basePayload = {
+        employee_id: Number(id),
+        deduction_name: selected.deduction_name || selected.name || "Deduction",
+        name: selected.name || selected.deduction_name || "Deduction",
+        amount: Number(selected.amount ?? 0),
+        type: selected.type === "percentage" ? "percentage" : "fixed",
+      } as const;
+
+      try {
+        await benefitsService.createDeduction({
+          ...basePayload,
+          deduction_id: Number(selected.id),
+        });
+      } catch (err: any) {
+        // Fallback: try without deduction_id in case backend doesn't accept it
+        await benefitsService.createDeduction(basePayload as any);
+      }
+      setDeductionToAdd("");
+      const newItem: CatalogItem = {
+        id: selected.id,
+        deduction_name: selected.deduction_name || selected.name || "Deduction",
+        name: selected.name || selected.deduction_name || "Deduction",
+        amount: Number(selected.amount ?? 0),
+        type: selected.type === "percentage" ? "percentage" : "fixed",
+      };
+      setDeductionEdits((prev) => [...prev, newItem]);
+      setInitialDeductions((prev) => [...prev, newItem]);
+      setAvailableDeductions((prev) => prev.filter((d) => Number(d.id) !== Number(selected.id)));
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || "Failed to add deduction");
+    } finally {
+      setAddingDeduction(false);
+    }
+  };
+
+  const diffCatalog = (original: CatalogItem[], edited: CatalogItem[], kind: "benefit" | "deduction") => {
+    const updates: CatalogItem[] = [];
+    edited.forEach((item) => {
+      const base = original.find((o) => o.id === item.id);
+      if (!base) return;
+      const amountChanged = Number(base.amount ?? 0) !== Number(item.amount ?? 0);
+      const typeChanged = (base.type ?? "") !== (item.type ?? "");
+      if (amountChanged || typeChanged) {
+        updates.push({ ...item, kind });
+      }
+    });
+    return updates;
+  };
+
+  const refreshAllocations = async (empId?: number) => {
+    const targetId = empId ?? Number(id);
+    if (!targetId) return;
+    try {
+      setAllocLoading(true);
+      setAllocError("");
+      const res = await leaveAllocationsService.listByEmployee(Number(targetId));
+      const allocList = (res as any)?.data?.data ?? (res as any)?.data ?? [];
+      const normalized: LeaveAllocation[] = Array.isArray(allocList) ? allocList : [];
+      setAllocations(normalized);
+      const edits: Record<number, { leave_type_id: number; year: number; days_allocated: number; days_used: number; note?: string }> = {};
+      normalized.forEach((a) => {
+        edits[a.id] = {
+          leave_type_id: Number(a.leave_type_id),
+          year: Number(a.year ?? new Date().getFullYear()),
+          days_allocated: Number(a.days_allocated ?? 0),
+          days_used: Number(a.days_used ?? 0),
+          note: a.note ?? "",
+        };
+      });
+      setAllocationEdits(edits);
+    } catch (err: any) {
+      console.error(err);
+      setAllocError(err?.response?.data?.message || "Failed to load leave allocations");
+    } finally {
+      setAllocLoading(false);
+    }
+  };
+
+  const addAllocation = async () => {
+    if (!id) return;
+    const parsedYear = allocationForm.year ? Number(allocationForm.year) : new Date().getFullYear();
+    const parsedDays = Number(allocationForm.days_allocated);
+    const defaultDays = getDefaultDaysForLeaveType(allocationForm.leave_type_id);
+    const resolvedDays = allocationForm.days_allocated === "" ? defaultDays : parsedDays;
+    const parsedUsed = Number(allocationForm.days_used ?? 0);
+    if (!allocationForm.leave_type_id) {
+      setAllocError("Select a leave type to allocate");
+      return;
+    }
+    if (!Number.isFinite(resolvedDays) || resolvedDays < 0) {
+      setAllocError("Days allocated must be 0 or more");
+      return;
+    }
+    try {
+      setAllocLoading(true);
+      setAllocError("");
+      await leaveAllocationsService.create({
+        employee_id: Number(id),
+        leave_type_id: Number(allocationForm.leave_type_id),
+        year: parsedYear,
+        days_allocated: resolvedDays,
+        days_used: Number.isFinite(parsedUsed) ? parsedUsed : 0,
+        note: allocationForm.note?.trim() || undefined,
+      });
+      setAllocationForm((prev) => ({ ...prev, leave_type_id: "", days_allocated: "", days_used: "0", note: "" }));
+      await refreshAllocations(Number(id));
+    } catch (err: any) {
+      console.error(err);
+      setAllocError(err?.response?.data?.message || "Failed to add allocation");
+    } finally {
+      setAllocLoading(false);
+    }
+  };
+
+  const saveAllocationEdit = async (allocId: number) => {
+    if (!id || !allocationEdits[allocId]) return;
+    const draft = allocationEdits[allocId];
+    try {
+      setAllocLoading(true);
+      setAllocError("");
+      await leaveAllocationsService.update(Number(allocId), {
+        employee_id: Number(id),
+        leave_type_id: draft.leave_type_id,
+        year: draft.year,
+        days_allocated: draft.days_allocated,
+        days_used: draft.days_used,
+        note: draft.note?.trim() || undefined,
+      });
+      await refreshAllocations(Number(id));
+    } catch (err: any) {
+      console.error(err);
+      setAllocError(err?.response?.data?.message || "Failed to update allocation");
+    } finally {
+      setAllocLoading(false);
+    }
+  };
+
+  const deleteAllocation = async (allocId: number) => {
+    if (!id) return;
+    if (!window.confirm("Delete this leave allocation?")) return;
+    try {
+      setAllocLoading(true);
+      setAllocError("");
+      await leaveAllocationsService.remove(Number(allocId));
+      await refreshAllocations(Number(id));
+    } catch (err: any) {
+      console.error(err);
+      setAllocError(err?.response?.data?.message || "Failed to delete allocation");
+    } finally {
+      setAllocLoading(false);
+    }
+  };
+
+  const handleAssignSchedule = async () => {
+    if (!id || !selectedScheduleId) return;
+    if (!scheduleEffectiveFrom) {
+      setScheduleAssignError("Please choose an effective date");
+      return;
+    }
+    try {
+      setAssigningSchedule(true);
+      setScheduleAssignError("");
+      setScheduleAssignSuccess("");
+      const res = await workSchedulesService.assignToEmployee(
+        Number(id),
+        Number(selectedScheduleId),
+        scheduleEffectiveFrom
+      );
+      const data = (res as any)?.data?.data ?? (res as any)?.data ?? null;
+      const selected = schedules.find((s) => String(s.id) === String(selectedScheduleId));
+      const resolvedSchedule = {
+        ...(data?.work_schedule || data || selected || {
+          id: Number(selectedScheduleId),
+          name: selected?.name || "Work Schedule",
+          working_days: selected?.working_days,
+          hours_per_day: selected?.hours_per_day,
+          notes: selected?.notes,
+        }),
+        effective_from: data?.effective_from ?? data?.work_schedule?.effective_from ?? scheduleEffectiveFrom,
+      };
+      setCurrentSchedule(resolvedSchedule);
+      setScheduleAssignSuccess("Work schedule assigned");
+      setTimeout(() => setScheduleAssignSuccess(""), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setScheduleAssignError(err?.response?.data?.message || "Failed to assign work schedule");
+    } finally {
+      setAssigningSchedule(false);
+    }
+  };
+
+  const validateForm = () => {
+    if (!formData.employee_code) {
+      setError("Employee code is required");
+      return false;
+    }
+    if (!formData.first_name || !formData.last_name) {
+      setError("First name and last name are required");
+      return false;
+    }
+    if (!formData.email) {
+      setError("Email is required");
+      return false;
+    }
+    if (!formData.start_date) {
+      setError("Start date is required");
+      return false;
+    }
+    if (!formData.salary || formData.salary <= 0) {
+      setError("Salary must be greater than 0");
+      return false;
+    }
+    if (formData.password && formData.password !== formData.confirm_password) {
+      setError("Passwords do not match");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const payload = {
+        employee_code: formData.employee_code,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone,
+        gender: formData.gender,
+        date_of_birth: formData.date_of_birth,
+        address: formData.address,
+        department: formData.department,
+        position: formData.position,
+        start_date: formData.start_date,
+        salary: formData.salary,
+        status: formData.status,
+        nationality: formData.nationality,
+        national_id_number: formData.national_id_number,
+        nssf_number: formData.nssf_number,
+        passport_number: formData.passport_number,
+        work_permit_number: formData.work_permit_number,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_relationship: formData.emergency_contact_relationship,
+        name: (formData.name || `${formData.first_name} ${formData.last_name}`.trim()).trim(),
+        role: formData.role,
+        benefits: {
+          health_insurance: formData.health_insurance,
+          retirement_plan: formData.retirement_plan,
+          dental_coverage: formData.dental_coverage,
+          vision_coverage: formData.vision_coverage,
+        },
+        deductions: {
+          tax_percentage: formData.tax_percentage,
+          social_security_percentage: formData.social_security_percentage,
+          health_insurance_deduction: formData.health_insurance_deduction,
+        },
+      } as any;
+
+      // only send password if provided
+      if (formData.password) {
+        payload.password = formData.password;
+      }
+
+      if (!id) throw new Error("Missing employee id");
+
+      try {
+        // Canonical backend route:
+        // PUT /api/v1/employees/{employee}
+        await api.put(`/api/v1/employees/${id}`, payload);
+      } catch (err: any) {
+        const status = err?.response?.status as number | undefined;
+        // Minimal safe fallback for setups that only allow PATCH.
+        if (status === 405) {
+          await api.patch(`/api/v1/employees/${id}`, payload);
+        } else {
+          throw err;
+        }
+      }
+
+      const benefitUpdates = diffCatalog(initialBenefits, benefitEdits, "benefit");
+      const deductionUpdates = diffCatalog(initialDeductions, deductionEdits, "deduction");
+      const syncWarnings: string[] = [];
+
+      // Apply catalog updates sequentially to avoid backend race issues
+      for (const b of benefitUpdates) {
+        if (!b.id) continue;
+        try {
+          await benefitsService.updateBenefit({
+            id: Number(b.id),
+            employee_id: Number(id),
+            benefit_name: b.benefit_name || b.name || "",
+            amount: Number(b.amount ?? 0),
+            type: b.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some benefits";
+          syncWarnings.push(String(msg));
+        }
+      }
+
+      for (const d of deductionUpdates) {
+        if (!d.id) continue;
+        try {
+          await benefitsService.updateDeduction({
+            id: Number(d.id),
+            employee_id: Number(id),
+            deduction_name: d.deduction_name || d.name || "",
+            amount: Number(d.amount ?? 0),
+            type: d.type === "percentage" ? "percentage" : "fixed",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || "Failed to update some deductions";
+          syncWarnings.push(String(msg));
+        }
+      }
+
+      setSuccess(
+        syncWarnings.length
+          ? `Employee updated, but some benefit/deduction updates failed: ${syncWarnings[0]}`
+          : "Employee updated successfully!"
+      );
+      setTimeout(() => {
+        router.push(`/employees/${id}`);
+      }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.message || "Failed to update employee");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <HRMSSidebar>
+      <div className="space-y-6">
+        <Link
+          href={id ? `/employees/${id}` : "/employees"}
+          className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </Link>
+
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Employee</h1>
+          <p className="text-gray-500 mt-1">Update employee details across multiple sections</p>
+        </div>
+
+        {id ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <EmployeePhotoUploader
+              employeeId={id}
+              photoUrl={photoUrl}
+              onUploaded={(payload) => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+                const extractPhotoUrl = (obj: unknown): string | null => {
+                  if (!obj || typeof obj !== "object") return null;
+                  const rec = obj as Record<string, unknown>;
+                  const raw =
+                    rec.photo_url ??
+                    rec.photoUrl ??
+                    rec.photo ??
+                    rec.avatar_url ??
+                    rec.avatar ??
+                    rec.profile_photo_url ??
+                    rec.profile_image_url ??
+                    rec.image_url ??
+                    rec.image ??
+                    null;
+                  if (raw === null || raw === undefined) return null;
+                  const url = String(raw);
+                  if (url.startsWith("/") && apiBase) return `${apiBase.replace(/\/$/, "")}${url}`;
+                  return url;
+                };
+                const next = extractPhotoUrl(payload);
+                if (next) setPhotoUrl(next);
+              }}
+            />
+          </div>
+        ) : null}
+
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+            {success}
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="flex gap-0 border-b border-gray-200">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${
+                    activeTab === tab.id
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-700 hover:text-gray-900"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {activeTab === "personal" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Employee Code *</label>
+                    <input
+                      type="text"
+                      name="employee_code"
+                      value={formData.employee_code}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+                    <input
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+                    <input
+                      type="text"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                    <select
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
+                    <input
+                      type="date"
+                      name="date_of_birth"
+                      value={formData.date_of_birth}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                    <input
+                      type="text"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                    <input
+                      type="text"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+                    <input
+                      type="text"
+                      name="position"
+                      value={formData.position}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+                    <input
+                      type="date"
+                      name="start_date"
+                      value={formData.start_date}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Salary *</label>
+                    <input
+                      type="number"
+                      name="salary"
+                      value={formData.salary}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="on_leave">On Leave</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "account" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">User Account</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder={`${formData.first_name} ${formData.last_name}`.trim() || "e.g. john.doe"}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                    <select
+                      name="role"
+                      value={formData.role}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="employee">Employee</option>
+                      <option value="manager">Manager</option>
+                      <option value="hr">HR</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Password (leave blank to keep)</label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                    <input
+                      type="password"
+                      name="confirm_password"
+                      value={formData.confirm_password}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "legal" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900">Legal & Emergency</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nationality</label>
+                    <select
+                      name="nationality"
+                      value={formData.nationality}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">-</option>
+                      <option value="khmer">Khmer</option>
+                      <option value="foreign">Foreign</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">National ID Number</label>
+                    <input
+                      type="text"
+                      name="national_id_number"
+                      value={formData.national_id_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">NSSF Number</label>
+                    <input
+                      type="text"
+                      name="nssf_number"
+                      value={formData.nssf_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Passport Number</label>
+                    <input
+                      type="text"
+                      name="passport_number"
+                      value={formData.passport_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Work Permit Number</label>
+                    <input
+                      type="text"
+                      name="work_permit_number"
+                      value={formData.work_permit_number}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <h3 className="text-sm font-semibold text-gray-800">Emergency Contact</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_name"
+                      value={formData.emergency_contact_name}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_phone"
+                      value={formData.emergency_contact_phone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Relationship</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_relationship"
+                      value={formData.emergency_contact_relationship}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border text-black border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "documents" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
+                  <p className="text-sm text-gray-500">Upload or update employee documents.</p>
+                </div>
+
+                {documentsNotice ? (
+                  <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800">
+                    {documentsNotice}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">ID Card</label>
+                    {documents?.id_card_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.id_card_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("id_card", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Contract</label>
+                    {documents?.contract_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.contract_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("contract", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">CV</label>
+                    {documents?.cv_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.cv_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("cv", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Certificate</label>
+                    {documents?.certificate_file_path ? (
+                      <a
+                        href={resolveFileUrl(documents.certificate_file_path)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-700 hover:underline break-all"
+                      >
+                        Open current
+                      </a>
+                    ) : (
+                      <div className="text-sm text-gray-500">No file uploaded</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => updateDocumentFile("certificate", e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDocumentsUpload}
+                    disabled={documentsUploading || !hasSelectedDocuments}
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow"
+                  >
+                    {documentsUploading ? "Uploading..." : "Upload / Update"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentFiles({})}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 text-sm"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "benefits" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Compensation & Deductions</h3>
+                     <p className="text-sm text-gray-500 mt-1">Manage recurring benefits and tax deductions.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* Benefits Column */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                        <div className="w-8 h-8 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                            <Gift className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Allowances & Benefits</h3>
+                            <p className="text-xs text-gray-500">Add extra compensation</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 rounded-lg shadow-sm">
+                      <select
+                        className="flex-1 px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0"
+                        value={benefitToAdd}
+                        onChange={(e) => setBenefitToAdd(e.target.value)}
+                      >
+                        <option value="">Select benefit to add...</option>
+                        {availableBenefits.map((b) => (
+                          <option key={b.id} value={String(b.id)}>
+                            {b.benefit_name || b.name} {b.amount ? `• ${b.type === "percentage" ? `${b.amount}%` : `$${b.amount}`}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!benefitToAdd || addingBenefit}
+                        onClick={addBenefitFromCatalog}
+                        className="px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded-md disabled:opacity-50 hover:bg-green-700 transition-colors shadow-sm"
+                      >
+                        {addingBenefit ? "Adding..." : "Add"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {benefitEdits.length ? (
+                        benefitEdits.map((item) => (
+                          <div key={`${item.benefit_name || item.name}-${item.id}`} className="p-4 bg-white border border-green-100 rounded-xl shadow-sm space-y-3 group hover:border-green-200 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">{item.benefit_name || item.name}</span>
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                                item.type === "percentage"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-green-50 text-green-700 border-green-100"
+                              }`}>
+                                {item.type === "percentage" ? "% Rate" : "Fixed Amt"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Value</label>
+                                <input
+                                  type="number"
+                                  value={Number(item.amount ?? 0)}
+                                  onChange={(e) => updateBenefitEdit(item.id, "amount", e.target.value)}
+                                  min={0}
+                                  step="0.01"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm font-medium focus:ring-1 focus:ring-green-500 focus:border-green-500 active:bg-white focus:bg-white transition-all text-right"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Type</label>
+                                <select
+                                  value={item.type === "percentage" ? "percentage" : "fixed"}
+                                  onChange={(e) => updateBenefitEdit(item.id, "type", e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                                >
+                                  <option value="fixed">Fixed ($)</option>
+                                  <option value="percentage">Percent (%)</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                        ) : (
+                           <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                                <p className="text-xs text-gray-400 font-medium">No active benefits</p>
+                           </div>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* Deductions Column */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                     <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                        <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+                            <Shield className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Tax & Deductions</h3>
+                            <p className="text-xs text-gray-500">Manage withholdings</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 rounded-lg shadow-sm">
+                      <select
+                        className="flex-1 px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0"
+                        value={deductionToAdd}
+                        onChange={(e) => setDeductionToAdd(e.target.value)}
+                      >
+                        <option value="">Select deduction to add...</option>
+                        {availableDeductions.map((d) => (
+                          <option key={d.id} value={String(d.id)}>
+                            {d.deduction_name || d.name} {d.amount ? `• ${d.type === "percentage" ? `${d.amount}%` : `$${d.amount}`}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!deductionToAdd || addingDeduction}
+                        onClick={addDeductionFromCatalog}
+                        className="px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-md disabled:opacity-50 hover:bg-red-700 transition-colors shadow-sm"
+                      >
+                         {addingDeduction ? "Adding..." : "Add"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                         {deductionEdits.length ? (
+                        deductionEdits.map((item) => (
+                           <div key={`${item.deduction_name || item.name}-${item.id}`} className="p-4 bg-white border border-red-100 rounded-xl shadow-sm space-y-3 group hover:border-red-200 transition-colors">
+                             <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">{item.deduction_name || item.name}</span>
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                                item.type === "percentage"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-red-50 text-red-700 border-red-100"
+                              }`}>
+                                {item.type === "percentage" ? "% Rate" : "Fixed Amt"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Amount</label>
+                                <input
+                                  type="number"
+                                  value={Number(item.amount ?? 0)}
+                                  onChange={(e) => updateDeductionEdit(item.id, "amount", e.target.value)}
+                                  min={0}
+                                  step="0.01"
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm font-medium focus:ring-1 focus:ring-red-500 focus:border-red-500 active:bg-white focus:bg-white transition-all text-right"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Type</label>
+                                <select
+                                  value={item.type === "percentage" ? "percentage" : "fixed"}
+                                  onChange={(e) => updateDeductionEdit(item.id, "type", e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                                >
+                                  <option value="fixed">Fixed ($)</option>
+                                  <option value="percentage">Percent (%)</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                         ) : (
+                           <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                                <p className="text-xs text-gray-400 font-medium">No active deductions</p>
+                           </div>
+                         )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "attendance" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Leave Management</h3>
+                     <p className="text-sm text-gray-500 mt-1">Allocate annual leave quotas.</p>
+                  </div>
+                   <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium border border-blue-100">
+                     Annual Cycle
+                  </div>
+                </div>
+
+                {/* Allocation Form */}
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-5">
+                   <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <CalendarClock className="w-4 h-4" />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-900">New Allocation</h3>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="lg:col-span-2 group">
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Leave Type</label>
+                             <select
+                                name="leave_type_id"
+                                value={allocationForm.leave_type_id}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                            >
+                                <option value="">Select leave type...</option>
+                                {leaveTypes.map((lt) => (
+                                <option key={lt.id} value={lt.id}>
+                                    {lt.name} {lt.is_paid ? "(Paid)" : "(Unpaid)"} • {lt.default_days ?? lt.days_per_year ?? "-"} days
+                                </option>
+                                ))}
+                            </select>
+                            {allocationForm.leave_type_id && (
+                                <p className="text-xs text-blue-600 mt-1.5 font-medium">Default: {getDefaultDaysForLeaveType(allocationForm.leave_type_id)} days</p>
+                            )}
+                        </div>
+                        
+                        <div className="group">
+                             <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Year</label>
+                            <input
+                                type="number"
+                                name="year"
+                                value={allocationForm.year}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                                min={2000}
+                             />
+                        </div>
+                        
+                        <div className="group">
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Days</label>
+                            <input
+                                type="number"
+                                name="days_allocated"
+                                value={allocationForm.days_allocated}
+                                onChange={handleAllocationFormChange}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all font-bold text-blue-900"
+                                min={0}
+                                step={1}
+                                required
+                            />
+                        </div>
+
+                         <div className="lg:col-span-4 flex items-end justify-between gap-4">
+                             <div className="flex-1 group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Note <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                                <input
+                                    type="text"
+                                    name="note"
+                                    value={allocationForm.note}
+                                    onChange={handleAllocationFormChange}
+                                    className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                                    placeholder="e.g. Annual quota"
+                                />
+                             </div>
+                            <button
+                                type="button"
+                                onClick={addAllocation}
+                                disabled={allocLoading}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm hover:shadow-md disabled:opacity-50 font-medium transition-all"
+                            >
+                                {allocLoading ? "Assigning..." : "Assign Allocation"}
+                            </button>
+                         </div>
+                   </div>
+                </div>
+
+                {/* Existing Allocations */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2">Allocation History</h3>
+                  
+                  {allocations.length ? (
+                    <div className="grid gap-4">
+                      {allocations.map((alloc) => {
+                        const draft = allocationEdits[alloc.id] || {
+                          leave_type_id: Number(alloc.leave_type_id),
+                          year: Number(alloc.year ?? new Date().getFullYear()),
+                          days_allocated: Number(alloc.days_allocated ?? 0),
+                          days_used: Number(alloc.days_used ?? 0),
+                          note: alloc.note ?? "",
+                        };
+                        return (
+                          <div
+                            key={alloc.id}
+                            className="p-5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 transition-colors group shadow-sm hover:shadow"
+                          >
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs">
+                                        {draft.year}
+                                    </div>
+                                    <div>
+                                         <h4 className="text-sm font-bold text-gray-900">
+                                            {leaveTypes.find(lt => lt.id === draft.leave_type_id)?.name || "Unknown Type"}
+                                         </h4>
+                                         <p className="text-xs text-gray-500">
+                                            Used <span className="font-semibold text-gray-900">{draft.days_used}</span> of <span className="font-semibold text-gray-900">{draft.days_allocated}</span> days
+                                         </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                    type="button"
+                                    onClick={() => deleteAllocation(alloc.id)}
+                                    disabled={allocLoading}
+                                    className="px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-medium border border-red-100"
+                                    >
+                                    Remove
+                                    </button>
+                                     <button
+                                    type="button"
+                                    onClick={() => saveAllocationEdit(alloc.id)}
+                                    disabled={allocLoading}
+                                    className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded-md font-medium shadow-sm"
+                                    >
+                                    Save Changes
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Allocated</label>
+                                    <input
+                                        type="number"
+                                        value={draft.days_allocated}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "days_allocated", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm font-semibold text-gray-900 text-center"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Used</label>
+                                    <input
+                                        type="number"
+                                        value={draft.days_used}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "days_used", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm font-medium text-gray-700 text-center"
+                                    />
+                                </div>
+                                 <div className="col-span-2">
+                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Note</label>
+                                    <input
+                                        type="text"
+                                        value={draft.note ?? ""}
+                                        onChange={(e) => handleAllocationEditChange(alloc.id, "note", e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-gray-200 rounded text-sm text-gray-600"
+                                        placeholder="Add note..."
+                                    />
+                                </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <CalendarClock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                        <p className="text-sm text-gray-500">No leave allocations found for this employee.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "work-schedule" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Work Schedule</h3>
+                    <p className="text-sm text-gray-500 mt-1">Manage working hours and shifts.</p>
+                  </div>
+                  <Link href="/settings/work-schedules" className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 transition-colors">
+                    Configure Schedules <Clock className="w-3 h-3" />
+                  </Link>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                    {/* Assignment Card */}
+                    <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                                <Clock className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">Assign Schedule</h3>
+                                <p className="text-xs text-gray-500">Update working pattern effective from a date.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Schedule Template</label>
+                                <select
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                                    value={selectedScheduleId}
+                                    onChange={(e) => setSelectedScheduleId(e.target.value)}
+                                    disabled={schedulesLoading}
+                                >
+                                    <option value="">Select a schedule template...</option>
+                                    {schedules.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name} • {s.hours_per_day}h / day
+                                    </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="group">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Effective Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all"
+                                    value={scheduleEffectiveFrom}
+                                    onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
+                                />
+                            </div>
+                            
+                            <div className="md:col-span-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleAssignSchedule}
+                                    disabled={assigningSchedule || !selectedScheduleId || !scheduleEffectiveFrom}
+                                    className="w-full py-2.5 bg-indigo-600 text-white font-semibold rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    {assigningSchedule ? "Updating Schedule..." : "Confirm Schedule Assignment"}
+                                </button>
+                                {scheduleAssignError && <p className="text-sm text-red-600 mt-2 text-center bg-red-50 py-1 rounded">{scheduleAssignError}</p>}
+                                {scheduleAssignSuccess && <p className="text-sm text-green-600 mt-2 text-center bg-green-50 py-1 rounded">{scheduleAssignSuccess}</p>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Current Schedule Card */}
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-6">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Active Configuration</h4>
+                         {currentSchedule ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="text-2xl font-bold text-gray-900 mb-1">{currentSchedule.name}</div>
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-gray-200 shadow-sm text-xs font-medium text-gray-700">
+                                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                        {currentSchedule.hours_per_day ?? "-"} Hours / Day
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase">Working Days</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(currentSchedule.working_days || []).map((d: string) => (
+                                        <span key={d} className="px-2 py-1 rounded-md text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                            {d.substring(0, 3)}
+                                        </span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {currentSchedule.effective_from && (
+                                     <div className="pt-4 border-t border-gray-200">
+                                        <p className="text-xs text-gray-500">Effective Since</p>
+                                        <p className="text-sm font-medium text-gray-900">{new Date(currentSchedule.effective_from).toLocaleDateString()}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+                                <Clock className="w-8 h-8 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-500">No schedule assigned</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-100 mt-2">
+              <Link
+                href={id ? `/employees/${id}` : "/employees"}
+                className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                tabIndex={0}
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
+              >
+                {saving ? (
+                    <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                        Saving Changes...
+                    </>
+                ) : (
+                    "Save Changes"
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </HRMSSidebar>
+  );
+}

@@ -35,7 +35,7 @@ export function SidebarProvider({
           setState((state) => (state === "expanded" ? "collapsed" : "expanded")),
       }}
     >
-      <div className="flex h-screen">{children}</div>
+      <div className="flex h-screen bg-slate-50">{children}</div>
     </sidebarContext.Provider>
   )
 }
@@ -54,7 +54,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`flex flex-col border-r bg-white transition-all duration-300 ${
+      className={`flex flex-col border-r border-slate-200/90 bg-white/95 backdrop-blur-xl transition-all duration-300 ease-out ${
         isCollapsed ? "w-20" : "w-64"
       } ${className}`}
       {...props}
@@ -66,7 +66,7 @@ export function SidebarHeader({
   className = "",
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={`border-b px-4 py-4 ${className}`} {...props} />
+  return <div className={`border-b border-slate-200/90 px-4 py-4 ${className}`} {...props} />
 }
 
 export function SidebarContent({
@@ -74,7 +74,7 @@ export function SidebarContent({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`flex-1 overflow-auto px-2 py-4 ${className}`} {...props} />
+    <div className={`flex-1 overflow-auto px-2 py-3 ${className}`} {...props} />
   )
 }
 
@@ -83,7 +83,7 @@ export function SidebarFooter({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`border-t px-3 py-3 ${className}`} {...props} />
+    <div className={`border-t border-slate-200/90 px-3 py-3 ${className}`} {...props} />
   )
 }
 
@@ -91,7 +91,7 @@ export function SidebarGroup({
   className = "",
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={`py-2 ${className}`} {...props} />
+  return <div className={`py-1.5 ${className}`} {...props} />
 }
 
 export function SidebarGroupLabel({
@@ -100,7 +100,7 @@ export function SidebarGroupLabel({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider ${className}`}
+      className={`px-3 py-2 text-[11px] font-semibold text-slate-400 uppercase tracking-[0.14em] ${className}`}
       {...props}
     />
   )
@@ -117,7 +117,7 @@ export function SidebarMenu({
   className = "",
   ...props
 }: React.HTMLAttributes<HTMLUListElement>) {
-  return <ul className={`space-y-1 ${className}`} {...props} />
+  return <ul className={`space-y-1.5 ${className}`} {...props} />
 }
 
 export function SidebarMenuItem({
@@ -147,8 +147,8 @@ export function SidebarMenuButton({
 
   const baseClass = `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
     isActive
-      ? "bg-blue-100 text-blue-600 font-medium"
-      : "text-gray-700 hover:bg-gray-100"
+      ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 font-semibold shadow-sm ring-1 ring-blue-100"
+      : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
   } ${className}`
 
   if (asChild) {
@@ -177,7 +177,7 @@ export function SidebarMenuSub({
   className = "",
   ...props
 }: React.HTMLAttributes<HTMLUListElement>) {
-  return <ul className={`ml-3 space-y-1 border-l border-gray-200 pl-3 ${className}`} {...props} />
+  return <ul className={`ml-3 space-y-1 border-l border-slate-200 pl-3 ${className}`} {...props} />
 }
 
 export function SidebarMenuSubItem({
@@ -202,8 +202,8 @@ export function SidebarMenuSubButton({
 }: SidebarMenuSubButtonProps) {
   const baseClass = `flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors ${
     isActive
-      ? "bg-blue-50 text-blue-600 font-medium"
-      : "text-gray-600 hover:bg-gray-50"
+      ? "bg-blue-50 text-blue-700 font-medium"
+      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
   } ${className}`
 
   if (asChild) {
@@ -241,7 +241,7 @@ export function SidebarTrigger({
   return (
     <button
       onClick={toggleSidebar}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 ${className}`}
+      className={`flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow ${className}`}
       {...props}
     >
       <svg

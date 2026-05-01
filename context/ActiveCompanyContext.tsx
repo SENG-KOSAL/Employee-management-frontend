@@ -108,7 +108,7 @@ export function ActiveCompanyProvider({ children }: { children: React.ReactNode 
     clearMeCache();
 
     // Full reload prevents stale tenant data.
-    window.location.href = "/super-admin";
+    window.location.href = "/super-admin/dashboard";
   }, []);
 
   const value = useMemo<ActiveCompanyState>(() => {
