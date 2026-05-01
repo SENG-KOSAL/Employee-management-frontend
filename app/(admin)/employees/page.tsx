@@ -432,7 +432,7 @@ export default function EmployeesPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Members</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Employee Lists</h1>
             <p className="text-gray-500 mt-1 text-sm">Manage your employees, roles, and permissions.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
