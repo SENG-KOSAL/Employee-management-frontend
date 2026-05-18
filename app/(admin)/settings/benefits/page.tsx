@@ -1,10 +1,10 @@
 'use client'
 import React, { useEffect, useMemo, useState } from 'react'
-import PageHeader from '../../../components/PageHeadder'
-import DataTable from '../../../components/DataTable'
-import BenefitForm from '../../../components/forms/BenefitForm'
-import type { BenefitItem } from '../../../types/hr'
-import { benefitsService } from '../../../services/benefits'
+import PageHeader from '@/components/PageHeadder'
+import DataTable from '@/components/DataTable'
+import BenefitForm from '@/components/forms/BenefitForm'
+import type { BenefitItem } from '@/types/hr'
+import { benefitsService } from '@/services/benefits'
 import { HRMSSidebar } from '@/components/layout/HRMSSidebar'
 export default function BenefitsPage() {
   const [benefitRows, setBenefitRows] = useState<BenefitItem[]>([])

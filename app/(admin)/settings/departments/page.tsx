@@ -1,9 +1,9 @@
 'use client'
 import Link from 'next/link'
 import React, { useEffect, useMemo, useState } from 'react'
-import DepartmentForm from '../../../components/forms/DepartmentForm'
-import type { Department } from '../../../types/hr'
-import { departmentsService } from '../../../services/departments'
+import DepartmentForm from '@/components/forms/DepartmentForm'
+import type { Department } from '@/types/hr'
+import { departmentsService } from '@/services/departments'
 import { Building2, CircleCheckBig, CircleX, Trash2 } from 'lucide-react'
 import { HRMSSidebar } from '@/components/layout/HRMSSidebar'
 

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import EmployeeLeave from "../../leave-requests/employee/page"
+import EmployeeLeave from "@/app/(admin)/leave-requests/employee/page"
 // export default function EmployeeLeaveRedirectPage() {
 //   const router = useRouter();
 
