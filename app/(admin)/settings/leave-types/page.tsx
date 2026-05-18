@@ -1,11 +1,11 @@
 'use client'
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import PageHeader from '../../../components/PageHeadder'
-import DataTable from '../../../components/DataTable'
-import LeaveTypeForm from '../../../components/forms/LeaveTypeForm'
-import type { LeaveType } from '../../../types/hr'
-import { leaveTypesService } from '../../../services/leaveTypes'
+import PageHeader from '@/components/PageHeadder'
+import DataTable from '@/components/DataTable'
+import LeaveTypeForm from '@/components/forms/LeaveTypeForm'
+import type { LeaveType } from '@/types/hr'
+import { leaveTypesService } from '@/services/leaveTypes'
 import { HRMSSidebar } from '@/components/layout/HRMSSidebar'
 
 export default function LeaveTypesPage() {
