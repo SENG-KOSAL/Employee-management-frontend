@@ -646,53 +646,7 @@ export default function PayrollDashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <PayrollStatCard
-              label="Gross Payroll"
-              value={`$${stats.totalGrossPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              helper="Selected filter scope"
-              icon={<Landmark className="h-4 w-4" />}
-              tone="blue"
-              deltaLabel={latestTrendComparison.payroll.label}
-              deltaDirection={latestTrendComparison.payroll.direction}
-            />
-            <PayrollStatCard
-              label="Net Payroll"
-              value={`$${stats.totalNetPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              helper="Actual employee take-home"
-              icon={<DollarSign className="h-4 w-4" />}
-              tone="green"
-              deltaLabel={latestTrendComparison.net.label}
-              deltaDirection={latestTrendComparison.net.direction}
-            />
-            <PayrollStatCard
-              label="Taxes"
-              value={`$${stats.totalTaxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              helper="Current withholding estimate"
-              icon={<BarChart3 className="h-4 w-4" />}
-              tone="rose"
-              deltaLabel={latestTrendComparison.taxes.label}
-              deltaDirection={latestTrendComparison.taxes.direction}
-            />
-            <PayrollStatCard
-              label="Deductions"
-              value={`$${stats.totalDeductions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              helper="Benefits and other deductions"
-              icon={<Receipt className="h-4 w-4" />}
-              tone="amber"
-              deltaLabel={latestTrendComparison.deductions.label}
-              deltaDirection={latestTrendComparison.deductions.direction}
-            />
-            <PayrollStatCard
-              label="Employees"
-              value={`${stats.payrolls}`}
-              helper="Included in filtered runs"
-              icon={<Users className="h-4 w-4" />}
-              tone="indigo"
-              deltaLabel={latestTrendComparison.employees.label}
-              deltaDirection={latestTrendComparison.employees.direction}
-            />
-          </div>
+          
 
           <div className="bg-white border border-gray-100 rounded-2xl shadow-md overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/50">

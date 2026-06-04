@@ -37,19 +37,8 @@ export function RoleGate({
 }) {
   const router = useRouter()
 
-  const [role, setRole] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null
-    const cached = getMe<MePayload>()
-    return getRole(cached)
-  })
-
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === "undefined") return true
-    const token = getToken()
-    if (!token) return true
-    const cached = getMe<MePayload>()
-    return !cached
-  })
+  const [role, setRole] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const allowed = useMemo(() => {
     if (!role) return false
@@ -68,6 +57,8 @@ export function RoleGate({
 
     const cached = getMe<MePayload>()
     if (cached) {
+      setRole(getRole(cached))
+      setLoading(false)
       return
     }
 

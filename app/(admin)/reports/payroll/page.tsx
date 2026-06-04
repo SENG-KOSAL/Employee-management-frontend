@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CalendarDays, FileSpreadsheet, FileText, Filter, Sparkles } from "lucide-react";
+import { FileSpreadsheet, FileText, Filter, Sparkles } from "lucide-react";
 
 import { HRMSSidebar } from "@/components/layout/HRMSSidebar";
 import { RoleGate } from "@/components/auth/RoleGate";
@@ -11,7 +11,6 @@ import api from "@/services/api";
 
 type GenericRow = Record<string, unknown>;
 type TabKey = "payroll" | "payslips" | "summary" | "insights";
-type RangeKey = "day" | "week" | "month";
 
 type PayrollRunRow = {
   id: number;
@@ -92,45 +91,18 @@ const formatDate = (value: unknown) => {
 
 export default function PayrollReportPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("payroll");
-  const [range, setRange] = useState<RangeKey>("month");
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [rows, setRows] = useState<PayrollRunRow[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
   const [runSearch, setRunSearch] = useState("");
-
-  const applyDatePreset = (daysBack: number) => {
-    const today = new Date();
-    const to = today.toISOString().slice(0, 10);
-    const start = new Date(today);
-    start.setDate(start.getDate() - daysBack);
-    const from = start.toISOString().slice(0, 10);
-    setFromDate(from);
-    setToDate(to);
-  };
-
-  const handleRangeChange = (nextRange: RangeKey) => {
-    setRange(nextRange);
-    if (nextRange === "day") {
-      applyDatePreset(0);
-      return;
-    }
-    if (nextRange === "week") {
-      applyDatePreset(6);
-      return;
-    }
-    applyDatePreset(29);
-  };
+  const [monthInput, setMonthInput] = useState("");
 
   const clearFilters = () => {
     setStatusFilter("all");
     setRunSearch("");
-    setRange("month");
-    applyDatePreset(29);
   };
 
   useEffect(() => {
@@ -139,7 +111,7 @@ export default function PayrollReportPage() {
   }, []);
 
   useEffect(() => {
-    applyDatePreset(29);
+    setMonthInput(new Date().toISOString().slice(0, 7));
   }, []);
 
   useEffect(() => {
@@ -152,9 +124,9 @@ export default function PayrollReportPage() {
         const payload = toArray(runsRes.data);
         const mapped = payload
           .map((row): PayrollRunRow => {
-            const grossPay = toNumber(row.total_gross_pay ?? row.gross_pay ?? row.total_amount);
-            const netPay = toNumber(row.total_net_pay ?? row.net_pay);
-            const deductions = toNumber(row.total_deductions ?? row.deductions);
+            const grossPay = toNumber(row.payrolls_sum_gross_pay ?? row.total_gross_pay ?? row.gross_pay ?? row.total_amount);
+            const netPay = toNumber(row.payrolls_sum_net_pay ?? row.total_net_pay ?? row.net_pay);
+            const deductions = toNumber(row.payrolls_sum_deductions_total ?? row.total_deductions ?? row.deductions);
 
             return {
               id: toNumber(row.id),
@@ -182,22 +154,18 @@ export default function PayrollReportPage() {
     void load();
   }, []);
 
-  const inDateRange = (date: string) => {
-    if (!date) return true;
-    if (fromDate && date < fromDate) return false;
-    if (toDate && date > toDate) return false;
-    return true;
-  };
-
   const filtered = useMemo(() => {
     const search = runSearch.trim().toLowerCase();
     return rows.filter((row) => {
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
-      if (!inDateRange(row.periodStart || row.createdAt)) return false;
+      if (monthInput) {
+        const rowMonth = (row.periodStart || row.createdAt || "").slice(0, 7);
+        if (rowMonth !== monthInput) return false;
+      }
       if (!search) return true;
       return String(row.id).includes(search) || row.status.includes(search);
     });
-  }, [rows, statusFilter, fromDate, toDate, runSearch]);
+  }, [rows, statusFilter, monthInput, runSearch]);
 
   const totalRuns = filtered.length;
   const draftRuns = filtered.filter((r) => r.status === "draft").length;
@@ -368,7 +336,17 @@ export default function PayrollReportPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-slate-600">Month</span>
+                <input
+                  type="month"
+                  value={monthInput}
+                  onChange={(e) => setMonthInput(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+
               <label className="space-y-1">
                 <span className="text-xs font-medium text-slate-600">Run status</span>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
@@ -380,7 +358,7 @@ export default function PayrollReportPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">Search run ID</span>
+                <span className="text-xs font-medium text-slate-600">Search (run ID or status)</span>
                 <input
                   value={runSearch}
                   onChange={(e) => setRunSearch(e.target.value)}
@@ -388,42 +366,6 @@ export default function PayrollReportPage() {
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 />
               </label>
-
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">From</span>
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">To</span>
-                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-              </label>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">Quick range</span>
-                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  {[{ id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" }].map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => handleRangeChange(r.id as RangeKey)}
-                      className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${range === r.id ? "bg-blue-500 text-white" : "text-slate-600"}`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-xs font-medium text-slate-600">Presets</span>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setRange("day"); applyDatePreset(0); }} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">Today</button>
-                  <button onClick={() => { setRange("week"); applyDatePreset(6); }} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">Last 7 days</button>
-                  <button onClick={() => { setRange("month"); applyDatePreset(29); }} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">Last 30 days</button>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -433,10 +375,8 @@ export default function PayrollReportPage() {
           {activeTab === "summary" ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">Summary Report ({range === "day" ? "Daily" : range === "week" ? "Weekly" : "Monthly"})</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                  <CalendarDays className="h-3.5 w-3.5" /> Finance quick scan
-                </span>
+                <h2 className="text-lg font-semibold text-slate-900">Summary Report</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">Finance quick scan</span>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

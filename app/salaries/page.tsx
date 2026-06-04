@@ -186,21 +186,21 @@ export default function SalariesPage() {
             icon={<DollarSign className="h-5 w-5" />}
             tone="green"
           />
-          <PayrollStatCard
+          {/* <PayrollStatCard
             label="Annual Run-Rate"
             value={currency(totals.yearly)}
             helper="Projected annualized compensation"
             icon={<TrendingUp className="h-5 w-5" />}
             tone="indigo"
-          />
-          <PayrollStatCard
+          /> */}
+          {/* <PayrollStatCard
             label="Avg. Compensation"
             value={currency(averageCompensation)}
             helper="Per employee / month"
             icon={<DollarSign className="h-5 w-5" />}
             tone="slate"
             emphasis="inverted"
-          />
+          /> */}
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

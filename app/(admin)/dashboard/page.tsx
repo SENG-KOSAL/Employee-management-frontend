@@ -181,70 +181,49 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 p-8 text-white shadow-lg shadow-indigo-500/20 sm:p-10">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 backdrop-blur-md">
-                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                <p className="text-xs font-semibold uppercase tracking-widest text-indigo-50">Admin Dashboard</p>
-              </div>
-              <h1 className="mb-2 text-3xl font-bold tracking-tight sm:text-4xl">
-                Welcome back, {user?.name || "Admin"}
-              </h1>
-              <p className="mt-3 max-w-2xl text-base font-medium text-indigo-100/90 sm:text-lg">
-                Here is the real-time overview of your organization today.
-              </p>
-            </div>
-            <button
-              onClick={refetch}
-              disabled={loadingStats}
-              className="group inline-flex self-start items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-white/20 hover:shadow md:self-center disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${loadingStats ? "animate-spin" : "group-hover:rotate-90"}`} />
-              {loadingStats ? "Refreshing..." : "Refresh Stats"}
-            </button>
+        <div className="flex items-center justify-between border-b border-slate-200 pb-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Dashboard</p>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">
+              Welcome, Admin
+            </h1>
           </div>
-          <div className="pointer-events-none absolute -right-8 -top-8 h-56 w-56 rounded-full bg-white/10 blur-3xl"></div>
+          <button
+            onClick={refetch}
+            disabled={loadingStats}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${loadingStats ? "animate-spin" : ""}`} />
+            {loadingStats ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {statCards.map((stat, idx) => {
             const Icon = stat.icon;
-            const colorMap = {
-              "bg-blue-50 text-blue-600": { icon: "text-blue-600", accent: "bg-blue-50", ring: "ring-blue-100", line: "from-blue-500 to-indigo-500" },
-              "bg-green-50 text-green-600": { icon: "text-emerald-600", accent: "bg-emerald-50", ring: "ring-emerald-100", line: "from-emerald-500 to-green-500" },
-              "bg-amber-50 text-amber-600": { icon: "text-amber-600", accent: "bg-amber-50", ring: "ring-amber-100", line: "from-amber-500 to-orange-500" },
-              "bg-purple-50 text-purple-600": { icon: "text-violet-600", accent: "bg-violet-50", ring: "ring-violet-100", line: "from-violet-500 to-indigo-500" }
-            };
-            const mappedColor = colorMap[stat.color as keyof typeof colorMap] || colorMap["bg-blue-50 text-blue-600"];
+            const borderClasses = stat.borderColor;
 
             return (
               <button
                 key={idx}
                 onClick={() => router.push(stat.href)}
-                className="group relative cursor-pointer overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-7"
+                className={`cursor-pointer rounded-xl border ${borderClasses} bg-white p-5 text-left shadow-sm transition-all hover:shadow-md sm:p-5`}
               >
-                <div className={`absolute left-0 top-0 h-1 w-full bg-gradient-to-r ${mappedColor.line}`}></div>
-                
-                <div className="relative z-10 flex items-start justify-between mb-6">
-                  <div className={`rounded-2xl p-3 ring-1 ${mappedColor.accent} ${mappedColor.ring}`}>
-                    <Icon className={`h-6 w-6 ${mappedColor.icon}`} />
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.color}`}>
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="rounded-full bg-slate-50 p-2 transition-colors group-hover:bg-indigo-50">
-                    <ChevronRight className="h-5 w-5 text-slate-400 transition-colors group-hover:text-indigo-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500">{stat.label}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-slate-900">
+                      {loadingStats ? (
+                        <span className="inline-block h-7 w-14 animate-pulse rounded bg-slate-200"></span>
+                      ) : (
+                        stat.value.toLocaleString()
+                      )}
+                    </p>
                   </div>
-                </div>
-                
-                <div className="relative z-10">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{stat.label}</p>
-                  <h3 className="text-3xl font-bold tracking-tight text-slate-800">
-                    {loadingStats ? (
-                      <span className="skeleton inline-block h-9 w-16 rounded"></span>
-                    ) : (
-                      stat.value.toLocaleString()
-                    )}
-                  </h3>
                 </div>
               </button>
             );
@@ -252,10 +231,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-              <span className="w-2 h-6 rounded-full bg-blue-500"></span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-6">
               Weekly Attendance
             </h3>
             <div className="h-80 w-full">
@@ -288,9 +266,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-              <span className="w-2 h-6 rounded-full bg-violet-500"></span>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-6">
               Employee Growth
             </h3>
             <div className="h-80 w-full">
@@ -329,99 +306,69 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Quick:</span>
           <button
             onClick={() => router.push("/leave-requests/create")}
-            className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
           >
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Calendar className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
-            </div>
-            <div className="relative z-10">
-              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
-                <Calendar className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="font-extrabold text-2xl tracking-tight">Leave Request</h3>
-              <p className="text-blue-100 text-sm mt-2 font-medium">Submit leave on behalf</p>
-            </div>
+            <Calendar className="h-4 w-4" />
+            Leave Request
           </button>
-          
           <button
             onClick={() => router.push("/payroll")}
-            className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-green-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200"
           >
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-              <FileText className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
-            </div>
-            <div className="relative z-10">
-              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
-                <FileText className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="font-extrabold text-2xl tracking-tight">Manage Payroll</h3>
-              <p className="text-green-100 text-sm mt-2 font-medium">Generate and track runs</p>
-            </div>
+            <FileText className="h-4 w-4" />
+            Payroll
           </button>
-
           <button
             onClick={() => router.push("/employees")}
-            className="group relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-[2rem] p-8 hover:shadow-xl hover:shadow-violet-500/20 hover:-translate-y-1 transition-all duration-300 text-left"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-violet-50 hover:text-violet-600 hover:border-violet-200"
           >
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Users className="w-32 h-32 -mt-12 -mr-12 transform rotate-12 group-hover:rotate-6 transition-transform duration-500" />
-            </div>
-            <div className="relative z-10">
-              <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm mb-6 shadow-inner">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="font-extrabold text-2xl tracking-tight">View Employees</h3>
-              <p className="text-purple-100 text-sm mt-2 font-medium">Manage team members</p>
-            </div>
+            <Users className="h-4 w-4" />
+            Employees
           </button>
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-indigo-500" />
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+                <Clock className="h-4 w-4 text-slate-600" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-800">Recent Activity</h3>
-                <p className="text-sm text-slate-500 mt-1 font-medium">Latest updates from your organization</p>
+                <h3 className="text-sm font-bold text-slate-800">Recent Activity</h3>
               </div>
             </div>
             <button
               onClick={() => router.push("/leave-requests")}
-              className="text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-colors"
+              className="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
             >
-              View All <ChevronRight className="w-4 h-4" />
+              View all
             </button>
           </div>
           <div className="divide-y divide-slate-100/80">
             {loadingActivities ? (
-              <div className="px-8 py-16 flex flex-col items-center justify-center gap-4 text-slate-500">
-                <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-indigo-600"></div>
-                <p className="font-bold text-sm uppercase tracking-widest animate-pulse">Loading Activity...</p>
+              <div className="flex items-center justify-center gap-3 px-6 py-12 text-slate-400">
+                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600"></div>
+                <p className="text-sm font-semibold">Loading activity...</p>
               </div>
             ) : activities.length === 0 ? (
-              <div className="px-8 py-16 text-center text-slate-500 font-medium">No recent activity found.</div>
+              <div className="px-6 py-12 text-center text-sm text-slate-400">No recent activity found.</div>
             ) : (
               activities.map((activity) => (
-                <div key={activity.id} className="px-8 py-5 hover:bg-indigo-50/40 transition-colors group cursor-pointer">
-                  <div className="flex items-start gap-5">
-                    <div className="text-3xl p-3 bg-slate-50 rounded-2xl group-hover:bg-white group-hover:shadow-sm transition-all">{activity.icon}</div>
-                    <div className="flex-1 min-w-0 py-1">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <p className="font-extrabold text-slate-800 text-base truncate group-hover:text-indigo-700 transition-colors">{activity.action}</p>
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap bg-slate-100 px-2.5 py-1 rounded-full">{formatTime(activity.timestamp)}</span>
-                      </div>
-                      <p className="text-sm text-slate-600 mt-1.5 truncate font-medium">{activity.description}</p>
+                <div key={activity.id} className="flex items-start gap-3 px-6 py-4 transition-colors hover:bg-slate-50 cursor-pointer">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-base shrink-0">{activity.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{activity.action}</p>
+                      <span className="shrink-0 text-xs font-medium text-slate-400">{formatTime(activity.timestamp)}</span>
                     </div>
-                    <div className="flex items-center justify-center h-12">
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 shrink-0 transition-transform group-hover:translate-x-1" />
-                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{activity.description}</p>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-slate-300 self-center shrink-0" />
                 </div>
               ))
             )}
@@ -429,12 +376,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Footer Status */}
-        <div className="text-center text-sm font-medium text-slate-400 py-4 flex items-center justify-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          Dashboard syncs automatically • Last updated: {new Date().toLocaleTimeString()}
+        <div className="text-center text-xs text-slate-400 py-4">
+          Data refreshes automatically
         </div>
       </div>
     </HRMSSidebar>
